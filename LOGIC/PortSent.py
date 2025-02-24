@@ -1,6 +1,6 @@
 import re
 import sys
-from PyQt5.QtGui import QRegularExpressionValidator
+from PyQt5.QtGui import QRegularExpressionValidator, QTextCursor
 from PyQt5.QtCore import QRegularExpression  # PyQt5
 import binascii
 import threading
@@ -29,11 +29,13 @@ class PortSelectDialog(QtWidgets.QDialog, Ui_Dialog_PortSelect):
     signal_get_RAM=pyqtSignal(str)
     signal_get_IO=pyqtSignal(str)
     signal_get_dpc = pyqtSignal(str)
-    signal_get_dcsr = pyqtSignal(str)
+    signal_csr_info = pyqtSignal(str)
     signal_status_bar = pyqtSignal(str)
     signal_refresh = pyqtSignal(str)
     BP_signal = pyqtSignal(str)
     signal_com_sending = pyqtSignal(bool)
+    signal_label_Port = pyqtSignal(str)
+    signal_run_process = pyqtSignal(int)
     def __init__(self, parent=None):
         super(PortSelectDialog, self).__init__(parent)
         self.receive_thread = None
@@ -41,6 +43,7 @@ class PortSelectDialog(QtWidgets.QDialog, Ui_Dialog_PortSelect):
         self.com = None
         self.urc=None
         self.setupUi(self)
+        self.run_porcess_thread=None
         self.signal_com_sending = False
         # 设置实例
         self.create_items()
@@ -65,8 +68,9 @@ class PortSelectDialog(QtWidgets.QDialog, Ui_Dialog_PortSelect):
         self.timer_urc.timeout.connect(self.urc_connection_detect)  # 计时结束调用operate()方法
         self.timer_urc.start(10000)
         self.timer.start(100)  # 设置计时间隔 100ms 并启动
-        self.receive_thread = ComReceiveThread(self.com, self.textEdit_Receive, self.com_close_button_clicked, self.checkBox_HexShow, self.signal_status_bar,)
+        self.receive_thread = ComReceiveThread(self.com, self.textBrowser_Receive, self.com_close_button_clicked, self.checkBox_HexShow, self.signal_status_bar,)
         self.receive_thread.start()
+        self.run_porcess_thread=Processbar(self.signal_run_process)
     # 设置信号与槽
     def create_signal_slot(self):
         self.pushButton_OpenPort.clicked.connect(self.com_open_button_clicked)
@@ -137,6 +141,30 @@ class PortSelectDialog(QtWidgets.QDialog, Ui_Dialog_PortSelect):
         QMessageBox.warning(self, "Canceled", "Upload canceled")
 
 #######NEW CODE###################################################################
+    def set_mem(self,address,value):
+            """弹出输入对话框，限制输入为 0 开头的 16 进制数"""
+            input_dialog = QInputDialog(self)
+            input_dialog.setInputMode(QInputDialog.TextInput)
+            input_dialog.setWindowTitle("set the memory, please input address and value")
+            input_dialog.setLabelText("please input hex nubmer（like 0x1A3F）:")
+            # 创建正则表达式，限制格式为 0x 开头的 16 进制数（可选大小写）
+            hex_regex = QRegularExpression(r"^0[xX][0-9a-fA-F]+$")
+            validator = QRegularExpressionValidator(hex_regex, self)
+            # 获取输入框并设置校验器
+            line_edit = input_dialog.findChild(QLineEdit)
+            line_edit_2 = input_dialog.findChild(QLineEdit)
+            if line_edit and line_edit_2:
+                line_edit.setValidator(validator)
+                line_edit_2.setValidator(validator)
+            # 显示对话框
+            if input_dialog.exec_() == QInputDialog.Accepted:
+                text_1 = input_dialog.textValue()
+                text_2 = input_dialog.textValue()
+                decimal_value_1 = int(text_1, 16)
+                decimal_value_2 = int(text_2, 16)
+                # 将十进制数转换回 16 进制字符串（带 "0x" 前缀）
+                if text_1 and text_2:
+                    self.urc.setmem(decimal_value_1,decimal_value_2)
     def set_dpc(self,address):
             """弹出输入对话框，限制输入为 0 开头的 16 进制数"""
             input_dialog = QInputDialog(self)
@@ -158,6 +186,7 @@ class PortSelectDialog(QtWidgets.QDialog, Ui_Dialog_PortSelect):
                 # 将十进制数转换回 16 进制字符串（带 "0x" 前缀）
                 if text:
                     self.urc.dpc_set(decimal_value)
+                    self.signal_get_dpc.emit(self.urc.dpc_read())
     def get_register(self):
         return self.urc.lookreg()
     def set_reset(self):
@@ -166,55 +195,150 @@ class PortSelectDialog(QtWidgets.QDialog, Ui_Dialog_PortSelect):
         self.urc.haltreq()
         #self.urc.dcsr_detect()
         self.urc.dpc_read()
-        a=self.urc.dpc_read()
-        b=self.urc.dcsr_read()
-        c=self.urc.trigger_read()
-        self.signal_get_dpc.emit('dpc='+a+'\ndscr='+b+'\n'+c)
+        c=self.urc.trigger_model_csr_read()
+        self.signal_get_dpc.emit(c[5][4])
+        self.signal_csr_info.emit(c[-1])
         self.urc.trigger_set(0x68001044, 'tdata1')
         self.urc.trigger_set(address, 'tdata2')
-        self.urc.trigger_read()
-        self.urc.dpc_read()
-        #self.urc.dcsr_detect()
-        self.urc.dcsr_set()
-        #self.urc.dpc_set(int(self.urc.dpc_read(), 16) + 4)
-        self.urc.dpc_read()
-        self.urc.haltresumereq()
     def remove_breakpoint(self,address):
         self.urc.haltreq()
-        #self.urc.dcsr_detect()
-        self.urc.dpc_read()
-        self.urc.trigger_read()
         self.urc.trigger_set(0x60000040, 'tdata1')
         self.urc.trigger_set(address, 'tdata2')
-        self.urc.trigger_read()
-        self.signal_get_dpc.emit(self.urc.dpc_read())
-        self.signal_get_dcsr.emit(self.urc.dcsr_read())
+        c = self.urc.trigger_model_csr_read()
+        self.signal_get_dpc.emit(c[5][4])
+        self.signal_csr_info.emit(c[-1])
         #self.urc.dpc_set(int(self.urc.dpc_read(), 16) + 4)
         self.urc.dpc_read()
-    def run_code(self):
+        return
+    def enable_breakpoint(self,address):
         self.urc.haltreq()
-        self.urc.trigger_read()
-        self.urc.dcsr_set(None)
-        a=self.urc.dpc_read()
-        b=self.urc.dcsr_read()
-        sleep(1)
-        self.signal_get_dpc.emit('dpc='+a+'\ndscr='+b)
+        self.urc.trigger_set(0x68001044, 'tdata1')
+        self.urc.trigger_set(address, 'tdata2')
+        c = self.urc.trigger_model_csr_read()
+        self.signal_get_dpc.emit(c[5][4])
+        self.signal_csr_info.emit(c[-1])
+        #self.urc.dpc_set(int(self.urc.dpc_read(), 16) + 4)
+        self.urc.dpc_read()
+        return
+    def disable_breakpoint(self,address):
+        self.urc.haltreq()
+        #self.urc.dcsr_detect()
+        self.urc.dpc_read()
+        self.urc.trigger_set(0x68001040, 'tdata1')
+        self.urc.trigger_set(address, 'tdata2')
+        c = self.urc.trigger_model_csr_read()
+        self.signal_get_dpc.emit(c[5][4])
+        self.signal_csr_info.emit(c[-1])
+        #self.urc.dpc_set(int(self.urc.dpc_read(), 16) + 4)
+        self.urc.dpc_read()
+        return
+    def run_code(self,run_option=None):
+        self.run_porcess_thread.start()
+        self.urc.haltreq()
+        #self.urc.dcsr_set(None)
+        step_count = 0
+        if run_option is None:
+            run_option = [False, False, False, True, False, False]
+        else:
+            run_option = run_option
+        total_steps = sum(run_option)  # 计算总步骤数
+        def update_progress():
+            nonlocal step_count
+            step_count += 1
+            progress_value = int((step_count / total_steps) * 100)
+            self.run_porcess_thread.signal_run_process.emit(progress_value)
+        a = b = c = ''
+        if run_option[0]:self.signal_get_register.emit('Run code then get Reg'),update_progress()
+        if run_option[1]:self.signal_get_RAM.emit('Run code then get RAM'),update_progress()
+        if run_option[2]:a = self.urc.machine_csr_read()[-1];update_progress()
+        if run_option[3]:b = self.urc.trigger_model_csr_read()[-1];update_progress()
+        if run_option[4]:c = self.urc.counter_time_csr_read()[-1];update_progress()
+        if run_option[5]:self.signal_label_Port.emit('P0 = ' + self.urc.gpio_read()),update_progress()
+        messages=a+b+c
+
+        dpc=self.urc.dpc_read()
+        dcsr_str=self.urc.dcsr_read()[0][-1]
+        if dcsr_str=='40000514':
+            self.urc.dcsr_detect(dcsr_str)
+            self.urc.dcsr_set(None)
+        elif dcsr_str=='40000490' or dcsr_str=='40000494':
+            self.signal_get_dpc.emit(dpc)
+            self.urc.dcsr_detect(dcsr_str)
+            trigger_data1_str = self.urc.trigger_tdata1_detect()[0][-1]
+            print('trigger_data1=', trigger_data1_str, '\n')
+            if trigger_data1_str == '68001044':
+                dpc = self.urc.dpc_read()
+                # 弹出对话框
+                reply = QMessageBox.question(
+                    self, "Breakpoint hit",
+                    f"CPU stop at  {dpc}, if clean the breakpoint？",
+                    QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+                )
+                if reply == QMessageBox.Yes:
+                    self.urc.trigger_set(0x60000040, 'tdata1')
+                    print('trigger data1 is clean to 0x60000040\n')
+                    QMessageBox.information(self, "clean successful", "breakpoint clean successful！")
+        self.signal_get_dpc.emit(dpc)
+        self.signal_csr_info.emit(messages)
         self.urc.haltresumereq()
-    def run_step_code(self):
+        return
+    def run_step_code(self,run_option=None):
         self.urc.haltreq()
         #self.urc.dcsr_detect()
         self.urc.dcsr_set('STEP')
-        a=self.urc.dpc_read()
-        b=self.urc.dcsr_read()
-        self.signal_get_dpc.emit('dpc='+a+'\ndscr='+b)
+        step_count = 0  # 当前已执行的步骤
+        if run_option is None:
+            run_option = [False, False, False, False, False, False]
+        else:
+            run_option = run_option
+        total_steps = sum(run_option)  # 计算总步骤数
+        def update_progress():
+            nonlocal step_count
+            step_count += 1
+            progress_value = int((step_count / total_steps) * 100)
+            self.run_porcess_thread.signal_run_process.emit(progress_value)
+        a = b = c = ''
+        if run_option[0]: self.signal_get_register.emit('Run code then get Reg'), update_progress()
+        if run_option[1]: self.signal_get_RAM.emit('Run code then get RAM'), update_progress()
+        if run_option[2]: a = self.urc.machine_csr_read()[-1];update_progress()
+        if run_option[3]: b = self.urc.trigger_model_csr_read()[-1];update_progress()
+        if run_option[4]: c = self.urc.counter_time_csr_read()[-1];update_progress()
+        if run_option[5]: self.signal_label_Port.emit('P0 = ' + self.urc.gpio_read()), update_progress()
+        messages=a+b+c
+        dpc=self.urc.dpc_read()
+        dcsr_str=self.urc.dcsr_read()[0][-1]
+        if dcsr_str=='40000514':
+            self.urc.dcsr_detect(dcsr_str)
+            self.urc.dcsr_set(None)
+        elif dcsr_str=='40000490' or dcsr_str=='40000494':
+            self.signal_get_dpc.emit(dpc)
+            self.urc.dcsr_detect(dcsr_str)
+            trigger_data1_str = self.urc.trigger_tdata1_detect()[0][-1]
+            print('trigger_data1=', trigger_data1_str, '\n')
+            if trigger_data1_str == '68001044':
+                dpc = self.urc.dpc_read()
+                # 弹出对话框
+                reply = QMessageBox.question(
+                    self, "Breakpoint hit",
+                    f"CPU stop at  {dpc}, if clean the breakpoint？",
+                    QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+                )
+                if reply == QMessageBox.Yes:
+                    self.urc.trigger_set(0x60000040, 'tdata1')
+                    print('trigger data1 is clean to 0x60000040\n')
+                    QMessageBox.information(self, "clean successful", "breakpoint clean successful！")
+        self.signal_get_dpc.emit(dpc)
+        self.signal_csr_info.emit(messages)
         self.urc.haltresumereq()
-        #self.urc.dcsr_set(None)
-        #self.urc.dcsr_read()
-        self.signal_get_register.emit('Run code then get Reg')
-        #self.signal_get_IO.emit('Run code then get IO')
-        #self.signal_get_RAM.emit('Run code then get RAM')
-    def get_RAM(self, Scroll_Value=None, Model='DC'):
-        if Model != None:
+        return
+
+    global RAM_model
+    RAM_model = 'IMEM'
+    def get_RAM(self, Scroll_Value=None, Model=None):
+        global RAM_model
+        if Model == None:
+            RAM_model = RAM_model
+        else:
             RAM_model = Model
         if self.urc.debug_status_detect == False:
             QMessageBox.warning(self, "Warning", "Please Open Serial Port")
@@ -222,35 +346,41 @@ class PortSelectDialog(QtWidgets.QDialog, Ui_Dialog_PortSelect):
         else:
             if Scroll_Value == None:
                 self.signal_status_bar.emit("Getting RAM")
-                if Model == None:
-                    match RAM_model:
-                        case 'DC':
-                            self.urc.lookmem_range(0x00000000,0x00000040)
+                match RAM_model:
+                    case 'IMEM':
+                        s=self.urc.lookmem_range(0x00000000,0x0000003c)
+                    case 'DMEM':
+                        s=self.urc.lookmem_range(0x80000000, 0x8000003c)
             else:
-                # Scroll_Value=hex(Scroll_Value)
-                start = 0x00000000 + Scroll_Value * 64  # 添加偏移
-                end = 0x0000003c + Scroll_Value * 64
+                match RAM_model:
+                    case 'IMEM':
+                        start = 0x00000000 + Scroll_Value * 64  # 添加偏移
+                        end = 0x0000003c + Scroll_Value * 64
+                    case 'DMEM':
+                        start = 0x80000000 + Scroll_Value * 64  # 添加偏移
+                        end = 0x8000003c + Scroll_Value * 64
                 start_str = hex(start)[2:]  # 去掉0x前缀
                 end_str = hex(end)[2:]
                 start_str = start_str.zfill(4)
                 end_str = end_str.zfill(4)
                 match RAM_model:
-                    case 'DC':
+                    case 'IMEM':
                         self.urc.debug_status_reset()
                         s=self.urc.lookmem_range(start,end)
-                    case 'DD':
-                        self.com.write(("DD" + " " + start_str + " " + end_str + "\r").encode("utf-8"))
+                    case 'DMEM':
+                        self.urc.debug_status_reset()
+                        s = self.urc.lookmem_range(start, end)
                     case 'DI':
                         self.com.write(("DI" + " " + start_str + " " + end_str + "\r").encode("utf-8"))
                     case 'DX':
                         self.com.write(("DX" + " " + start_str + " " + end_str + "\r").encode("utf-8"))
-                #self.textEdit_Receive.insertPlainText(s)
+                #self.textBrowser_Receive.insertPlainText(s)
                 # print(s)
                 # print(self.text_receive_RAM)
-                if len(s) == 0:
-                    raise Exception("Could not display program memory area. Please reset and try again.")
-                else:
-                    self.text_receive_RAM.emit(s)
+            if len(s) == 0:
+                raise Exception("Could not display program memory area. Please reset and try again.")
+            else:
+                self.text_receive_RAM.emit(s)
         return s
 
 ###################################################################################
@@ -291,7 +421,7 @@ class PortSelectDialog(QtWidgets.QDialog, Ui_Dialog_PortSelect):
 #串口接受
     def com_receive_data(self):
         def display_data(self, rxData):
-            self.textEdit_Receive.insertPlainText(rxData)
+            self.textBrowser_Receive.insertPlainText(rxData)
     # 串口刷新
     def com_refresh_button_clicked(self):
         self.comboBox_PortName.clear()
@@ -325,10 +455,10 @@ class PortSelectDialog(QtWidgets.QDialog, Ui_Dialog_PortSelect):
         #open serial signol send then serial_is_open==True
         self.open_serial_port()
         #### com Open Code here ####
-        comName = '/dev/ttyACM0'
-        comBaud = 19200
-        #comName = self.comboBox_PortName.currentText()
-        #comBaud = int(self.comboBox_BaudRate.currentText())
+        # comName = '/dev/ttyACM0'
+        # comBaud = 19200
+        comName = self.comboBox_PortName.currentText()
+        comBaud = int(self.comboBox_BaudRate.currentText())
         self.com.port=comName
         self.com.baudrate=comBaud
 
@@ -384,7 +514,16 @@ class PortSelectDialog(QtWidgets.QDialog, Ui_Dialog_PortSelect):
             # Serial port is not open, close the window
             self.close()  # Accept the close event
 
-
+class Processbar(QThread):
+    signal_run_process = pyqtSignal(int)
+    def __init__(self, signal_run_process):
+        super().__init__()
+        self.signal_run_process = signal_run_process
+    def run(self):
+        # for i in range(100):
+        #     self.signal_run_process.emit(i)
+        #     print(f'process is {i}')
+        return
 class UploadThread(QThread):
     progress = pyqtSignal(int)
     finished = pyqtSignal(int)
@@ -428,12 +567,12 @@ class ComReceiveThread(QThread):
     def __init__(self, com, textEdit_Receive, Com_Close_Button_clicked, checkBox_HexShow, signal_status_bar):
         super().__init__()
         self.com = com
-        self.textEdit_Receive = textEdit_Receive
+        self.textBrowser_Receive = textEdit_Receive
         self.Com_Close_Button_clicked = Com_Close_Button_clicked
         self.checkBox_HexShow = checkBox_HexShow
         self.signal_status_bar = signal_status_bar
     def receive_zone_update(self, message):
-        self.textEdit_Receive.insertPlainText(message)
+        self.textBrowser_Receive.insertPlainText(message)
         self.signal_status_bar.emit(message)
 
     def run(self):
@@ -446,7 +585,8 @@ class ComReceiveThread(QThread):
                 self.Com_Close_Button_clicked()
             if self.checkBox_HexShow.isChecked() == False:
                 try:
-                    self.textEdit_Receive.insertPlainText(rxData.decode('UTF-8'))
+                    self.textBrowser_Receive.insertPlainText(rxData.decode('UTF-8'))
+                    self.textBrowser_Receive.moveCursor(QTextCursor.End)
                     if rxData != b'':
                         self.signal_status_bar.emit("Receiving Data")
                 except:
@@ -457,8 +597,9 @@ class ComReceiveThread(QThread):
                 hexStr = ' 0x'.join(re.findall('(.{2})', Data))
                 # 补齐第一个 0x
                 hexStr = '0x' + hexStr
-                self.textEdit_Receive.insertPlainText(hexStr)
-                self.textEdit_Receive.insertPlainText(' ')
+                self.textBrowser_Receive.insertPlainText(hexStr)
+                self.textBrowser_Receive.insertPlainText(' ')
+                self.textBrowser_Receive.moveCursor(QTextCursor.End)
             elif rxData == b'':
                 return None
         else:

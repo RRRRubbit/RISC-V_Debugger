@@ -12,7 +12,6 @@ import urjtag  # 现在可以导入 urjtag 了！
 class UrjtagTermin():
     signal_connection=pyqtSignal(bool)
     def __init__(self, parent=None):
-
         self.receive_thread = None
         self.timer = None
         self.urc = None
@@ -131,11 +130,11 @@ class UrjtagTermin():
         hex_num = hex(memory_addr)[2:].zfill(8)
         memory_addr_int=self.dmi_instruction_generate(0x2,memory_addr,0x04)
         CMD_LOOKMEM = [
-            0x800010900E,  # lw s0 0(s0) progbuff0
+            0x80003cbc0e,  # lw t4 0(t4) progbuff0
             0x84004001CE,  # ebreak    progbuff1
             memory_addr_int,  # write address in data 0
-            0x5C009C4022,  # copy dato 0 to s0 then exe progbuff0 and progbuff1
-            0x5C00884022,  # copy s0 to data0, transfer=1
+            0x5c009c407a, # copy dato 0 to t4 then exe progbuff0 and progbuff1
+            0x5c0088407a,   # copy t4 to data0, transfer=1
             0x1000000001,  # read dato0
         ]
         self.urc.set_instruction("DMI")
@@ -149,7 +148,7 @@ class UrjtagTermin():
         memory_addr_value = self.urc.get_dr_out_string()
         # 提取前 7 位和后 2 位之间的部分
         middle_part_hex = '0x'+self.dmi_instruction_decode(memory_addr_value)
-        #print(f"Memory Address {hex_num}: {middle_part_hex}")
+        print(f"Memory Address {hex_num}: {middle_part_hex}")
         return f"{hex_num}: {middle_part_hex}"
     def lookmem_range(self, memory_addr_start=0x00000000, memory_addr_end=0x00000000):
         current_addr = memory_addr_start
@@ -158,34 +157,81 @@ class UrjtagTermin():
             memory_str += self.lookmem(current_addr) + '\r'
             current_addr += 4  # 按步长递增
         return memory_str
-    def trigger_read(self):
-        tselect = self.dmi_instruction_generate(0x2, 0x7A0022F3, 0x20)
-        tdata1 = self.dmi_instruction_generate(0x2, 0x7A1022F3, 0x20)
-        tdata2 = self.dmi_instruction_generate(0x2, 0x7A2022F3, 0x20)
-        tinfo = self.dmi_instruction_generate(0x2, 0x7A4022F3, 0x20)
-        cmd = [tselect, tdata1, tdata2, tinfo]
-        names = ["tselect", "tdata1", "tdata2", "tinfo"]  # 给每个元素一个名称
-        messages=''
-        for name, i in zip(names, cmd):
-            CMD_TDATAREAD = [
-                i,  # csrr x5, tdatareg read tdatareg to x5 progbuff0
+    def setmem(self,address,value):
+        self.haltreq()
+        hex_num = hex(address)[2:].zfill(8)
+        memory_value = self.dmi_instruction_generate(0x2, value, 0x04)
+        memory_address=self.dmi_instruction_generate(0x2, address, 0x04)
+        operator_cmd=self.dmi_instruction_generate(0x2,0x01EFA023,0x20)
+        CMD_LOOKMEM = [
+            memory_value,  # write address in data 0
+            0x5C008C407A,  # copy dato 0 to t5 and do nothing
+            operator_cmd, #sw t5(value) 0(t6)(address) put value in address
+            #0x80003cbc0e,  # sw t4 0(t4) progbuff0
+            0x84004001CE,  # ebreak    progbuff1
+            memory_address,
+            0x5C009C407E,  # copy dato 0 to t6 then exe progbuff0 and progbuff1
+            0x1000000001,  # read dato0
+        ]
+        self.urc.set_instruction("DMI")
+        self.urc.shift_ir()
+        for CMD in CMD_LOOKMEM:
+            # self.lookreg()
+            self.urc.set_dr_in(CMD)
+            self.urc.shift_dr()
+            self.urc.shift_dr()
+            # print(self.urc.get_dr_out_string())
+        memory_addr_value = self.urc.get_dr_out_string()
+        # 提取前 7 位和后 2 位之间的部分
+        middle_part_hex = '0x' + self.dmi_instruction_decode(memory_addr_value)
+        print(f"Memory Address {address:#x}: is set to {value:#x}")
+        return f"{hex_num}: {middle_part_hex}"
+    def trigger_model_csr_read(self):
+        csrs=[
+        # Trigger Module CSR (0x7a0 - 0x7a4)
+        (0x7a0, "tselect", "CSR_TSELECT", "Trigger Select Register"),
+        (0x7a1, "tdata1", "CSR_TDATA1", "Trigger Data Register 1"),
+        (0x7a2, "tdata2", "CSR_TDATA2", "Trigger Data Register 2"),
+        (0x7a4, "tinfo", "CSR_TINFO", "Trigger Information Register"),
+
+        # CPU Debug Mode CSR (0x7b0 - 0x7b2)
+        (0x7b0, "dcsr", "CSR_DCSR", "Debug Control and Status Register"),
+        (0x7b1, "dpc", "CSR_DPC", "Debug Program Counter"),
+        (0x7b2, "dscratch0", "CSR_DSCRATCH0", "Debug Scratch Register 0"),
+
+        ]
+        messages = ''
+        commands = []
+        for addr, name_asm, name_c, desc in csrs:
+            # self.debug_status_reset()
+            instruction = (addr << 20) | 0x2FF3  # 生成 CSR 读取指令
+            cmd = self.dmi_instruction_generate(0x2, instruction, 0x20)
+            CMD_MCSRREAD = [
+                cmd,  # csrr x5, tdatareg read tdatareg to x5 progbuff0
                 0x84004001CE,  # ebreak    progbuff1
                 # 0x84000001CE,  # progbuff1 NOP
-                0x5C009C4022,  # copy dato 0 to s0 then exe progbuff0 and progbuff1
-                0x5c00884016,  # copy x5 to data0, transfer=1
+                0x5C009C407E,  # copy dato 0 to t5 then exe progbuff0 and progbuff1
+                0x5C0088407E,  # copy t5 to data0, transfer=1
                 0x1000000001,  # read dato0
             ]
             self.urc.set_instruction("DMI")
             self.urc.shift_ir()
-            for CMD in CMD_TDATAREAD:
+            for CMD in CMD_MCSRREAD:
                 self.urc.set_dr_in(CMD)
                 self.urc.shift_dr()
                 self.urc.shift_dr()
             tdata = self.urc.get_dr_out_string()
             decoded_value = self.dmi_instruction_decode(tdata)
-            print(f"{name} = {decoded_value}")
-            messages+=f"\n{name}={decoded_value}"
-        return messages
+            #print(f"{name_asm} = {decoded_value}")
+            #print(f"{name_asm:<13} = {decoded_value:>9} - {desc}")
+            messages += f"\n{name_asm:<13} = {decoded_value:>9}"
+            commands.append((addr, name_asm, desc, cmd, decoded_value))
+            # if addr == 0x7bc:
+            #     self.mcause_read()
+            # elif addr == 0x7b0:
+            #     messages += f" {self.dcsr_detect(tdata)}"
+        commands.append(messages)
+        return commands
     def trigger_set(self, address, name=''):
         tselect = self.dmi_instruction_generate(0x2, 0x7A029073, 0x20)
         tdata1 = self.dmi_instruction_generate(0x2, 0x7A129073, 0x20)
@@ -203,7 +249,7 @@ class UrjtagTermin():
             dmi_instruction = dmi_instructions[1]
             cmd=cmds[1]
         CMD_TDATASET = [
-            cmd,  # csrw tdatareg, x5  write x5 to tdatareg progbuff0
+            cmd,  # csrw tdatareg, x5  write x5 to tdatareg progbuff0 7A0E9073 t4
             0x84004001CE,  # ebreak    progbuff1
             dmi_instruction,  # write new dpc in data 0
             # memory_addr_int,
@@ -219,6 +265,62 @@ class UrjtagTermin():
         decoded_value = self.dmi_instruction_decode(tdata)
         print(f"{name} is set to {hex(address)}")
         return
+    def trigger_tdata1_detect(self):
+        csrs=[(0x7a1, "tdata1", "CSR_TDATA1", "Trigger Data Register 1"),]
+        messages = ''
+        commands = []
+        for addr, name_asm, name_c, desc in csrs:
+            # self.debug_status_reset()
+            instruction = (addr << 20) | 0x2FF3  # 生成 CSR 读取指令
+            cmd = self.dmi_instruction_generate(0x2, instruction, 0x20)
+            CMD_MCSRREAD = [
+                cmd,  # csrr x5, tdatareg read tdatareg to x5 progbuff0
+                0x84004001CE,  # ebreak    progbuff1
+                # 0x84000001CE,  # progbuff1 NOP
+                0x5C009C407E,  # copy dato 0 to t5 then exe progbuff0 and progbuff1
+                0x5C0088407E,  # copy t5 to data0, transfer=1
+                0x1000000001,  # read dato0
+            ]
+            self.urc.set_instruction("DMI")
+            self.urc.shift_ir()
+            for CMD in CMD_MCSRREAD:
+                self.urc.set_dr_in(CMD)
+                self.urc.shift_dr()
+                self.urc.shift_dr()
+            tdata = self.urc.get_dr_out_string()
+            decoded_value = self.dmi_instruction_decode(tdata)
+            messages += f"\n{name_asm:<13} = {decoded_value:>9}"
+            commands.append((addr, name_asm, desc, cmd, decoded_value))
+        commands.append(messages)
+        return commands
+    def dcsr_read(self):
+        csrs=[(0x7b0, "dcsr", "CSR_DCSR", "Debug Control and Status Register"),]
+        messages = ''
+        commands = []
+        for addr, name_asm, name_c, desc in csrs:
+            # self.debug_status_reset()
+            instruction = (addr << 20) | 0x2FF3  # 生成 CSR 读取指令
+            cmd = self.dmi_instruction_generate(0x2, instruction, 0x20)
+            CMD_MCSRREAD = [
+                cmd,  # csrr x5, tdatareg read tdatareg to x5 progbuff0
+                0x84004001CE,  # ebreak    progbuff1
+                # 0x84000001CE,  # progbuff1 NOP
+                0x5C009C407E,  # copy dato 0 to t5 then exe progbuff0 and progbuff1
+                0x5C0088407E,  # copy t5 to data0, transfer=1
+                0x1000000001,  # read dato0
+            ]
+            self.urc.set_instruction("DMI")
+            self.urc.shift_ir()
+            for CMD in CMD_MCSRREAD:
+                self.urc.set_dr_in(CMD)
+                self.urc.shift_dr()
+                self.urc.shift_dr()
+            tdata = self.urc.get_dr_out_string()
+            decoded_value = self.dmi_instruction_decode(tdata)
+            messages += f"\n{name_asm:<13} = {decoded_value:>9}"
+            commands.append((addr, name_asm, desc, cmd, decoded_value))
+        commands.append(messages)
+        return commands
     def debug_status_detect(self):
         CMD_ABSTRACT=0x5800000001
         self.urc.set_instruction("DMI")
@@ -258,49 +360,42 @@ class UrjtagTermin():
             self.urc.shift_dr()
             self.urc.shift_dr()
             #print(self.urc.get_dr_out_string())
-    def dcsr_read(self):
-        dscr_read_cmd=self.dmi_instruction_generate(0x2,0x7B002EF3,0x20)
-        CMD_DCSRREAD = [
-            dscr_read_cmd, #csrw t4, dcsr x29
-            0x84004001CE,  # ebreak    progbuff1
-            0x5C009C4076,  # copy dato 0 to t4 then exe progbuff0 and progbuff1
-            0x5C00884076,   #opy t4 to data0, transfer=1
-            0x1000000001,  # read dato0
-        ]
-        self.urc.set_instruction("DMI")
-        self.urc.shift_ir()
-        for CMD in CMD_DCSRREAD:
-            self.urc.set_dr_in(CMD)
-            self.urc.shift_dr()
-            self.urc.shift_dr()
-        dcsr_value=self.urc.get_dr_out_string()
+    def dcsr_detect(self,decode_value):
+        dcsr_value_bin=bin(int(decode_value,16))
         # 提取 [8:6] 位
-        extracted_bits = dcsr_value[-11:-8]
-        dmi_str = self.dmi_instruction_decode(self.urc.get_dr_out_string())
+        dscr_value_str=str(dcsr_value_bin)[2:].zfill(31)
+        extracted_bits = dscr_value_str[-9:-6]
+
         # 检查提取的位是否为 '000'
         if extracted_bits != '000':
             # 使用 match - case 结构进行匹配
             match extracted_bits:
                 case '100':
-                    print('dcsr is ',dmi_str,'dcsr.cause - return from single-stepping')
+                    cause_str = 'cause - return from single-stepping'
+                    print('dcsr is ',decode_value,'dcsr.cause - return from single-stepping')
                 case '011':
-                    print('dcsr is ',dmi_str,'dcsr.cause - external halt request (from DM)')
+                    cause_str = 'cause - return from single-stepping'
+                    print('dcsr is ',decode_value,'dcsr.cause - external halt request (from DM)')
                 case '010':
-                    print('dcsr is ',dmi_str,'dcsr.cause - triggered by hardware')
+                    cause_str = 'cause - return from single-stepping'
+                    print('dcsr is ',decode_value,'dcsr.cause - triggered by hardware')
                 case '001':
-                    print('dcsr is ',dmi_str,'dcsr.cause - executed EBREAK instruction')
+                    cause_str = 'cause - return from single-stepping'
+                    print('dcsr is ',decode_value,'dcsr.cause - executed EBREAK instruction')
         else:
-            print('dcsr is ', dmi_str)
+            cause = ''
+            print('dcsr is ', decode_value)
             return
         #print('dcsr is ',self.dmi_instruction_decode(self.urc.get_dr_out_string()))
-        return dmi_str
+        return cause_str
     def mstatus_read(self):
+        mstatus_read_cmd = self.dmi_instruction_generate(0x2, 0x30002EF3, 0x20)
         CMD_DCSRREAD = [
-            0x80C00A41CE,  # csrw x5, mstatus read mstatus to x5
+            mstatus_read_cmd,  # csrr t4, mstatus read mstatus to x5
             0x84004001CE,  # ebreak    progbuff1
             # 0x84000001CE,  #progbuff1 NOP
-            0x5C009C4022,  # copy dato 0 to s0 then exe progbuff0 and progbuff1
-            0x5c00884016,  # copy x5 to data0, transfer=1
+            0x5C009C4076,  # copy dato 0 to t4 then exe progbuff0 and progbuff1
+            0x5C00884076,   #opy t4 to data0, transfer=1
             0x1000000001,  # read dato0
         ]
         self.urc.set_instruction("DMI")
@@ -314,23 +409,45 @@ class UrjtagTermin():
         return dmi_str
     def mstatus_set(self,CMD=None):
         return
+    def mtavl_read(self):
+        mtval_read_cmd = self.dmi_instruction_generate(0x2, 0x34302EF3, 0x20)
+        CMD_MTVALREAD = [
+            mtval_read_cmd,  # csrr t4, mtval read mtval to x5
+            0x84004001CE,  # ebreak    progbuff1
+            # 0x84000001CE,  #progbuff1 NOP
+            0x5C009C4076,  # copy dato 0 to t4 then exe progbuff0 and progbuff1
+            0x5C00884076,  # copy t4 to data0, transfer=1
+            0x1000000001,  # read dato0
+        ]
+        self.urc.set_instruction("DMI")
+        self.urc.shift_ir()
+        for CMD in CMD_MTVALREAD:
+            self.urc.set_dr_in(CMD)
+            self.urc.shift_dr()
+            self.urc.shift_dr()
+        dmi_str = self.dmi_instruction_decode(self.urc.get_dr_out_string())
+        print('mtval is ', dmi_str)
+        return dmi_str
     def dcsr_set(self,CMD=None):
         if CMD is None:
             dcsr_data0=0x1100001342 #setp bit =0
+            action_str = 'Clean step run status'
         elif CMD == 'STEP':
             dcsr_data0=0x1100001352
+            action_str = 'Set step run status'
         else:
             dcsr_data0=self.dmi_instruction_generate(0x2,CMD,0x04)
-            dcsr_set_cmd=self.dmi_instruction_generate(0x2,0x7B002EF3,0x20)
+        #dcsr_set_cmd=self.dmi_instruction_generate(0x2,0x7B002EF3,0x20)
+        dcsr_set_cmd = self.dmi_instruction_generate(0x2, 0x7B0E9073, 0x20) #csrw dcsr, t6
         CMD_STEPSET = [
-            #dcsr_set_cmd,
-            0x81EC3A41CC, # csrw dcsr, t4
+            dcsr_set_cmd,
             #0x81EC0A41CE,  # csrw dcsr, x5  write x5 to dcsr
             0x84004001CE,  # ebreak    progbuff1
             dcsr_data0,  # write new dcsr(step=1) in data 0
             # memory_addr_int,
             0x5C009C4076,  # copy dato 0 to t4 then exe progbuff0 and progbuff1
-            #0x5C009C4016,  # copy dato 0 to x5 then exe progbuff0 and progbuff1
+            0x5C00884076,  # copy t4 to data0, transfer=1
+            0x1000000001,  # read dato0
         ]
         self.urc.set_instruction("DMI")
         self.urc.shift_ir()
@@ -338,16 +455,14 @@ class UrjtagTermin():
             self.urc.set_dr_in(CMD)
             self.urc.shift_dr()
             self.urc.shift_dr()
-        #print(self.urc.get_dr_out_string())
+        dmi_str = self.dmi_instruction_decode(self.urc.get_dr_out_string())
+        print(f"dscr is set to",dmi_str,'-',action_str)
+        return dmi_str
     def dpc_read(self):
         dpc_read_cmd = self.dmi_instruction_generate(0x2, 0x7B102E73, 0x20)
         CMD_DPCREAD=[
-            #0x81EC408BCE,  #csrw x5, dpc read dpc to x5
             dpc_read_cmd, #csrw x28(t3), dpc read dpc to x28
-            #0x80D04A41CE,  #csrw x5, mepc read mepc to x5
-            #0x800010900E,  # lw s0 0(s0)
             0x84004001CE,  # ebreak    progbuff1
-            #memory_addr_int,  # write address in data 0
             0x5C009C4072,  # copy dato 0 to t3 then exe progbuff0 and progbuff1
             0x5C00884072,  # copy t3 to data0
             0x1000000001,  # read dato0
@@ -358,18 +473,18 @@ class UrjtagTermin():
             self.urc.set_dr_in(CMD)
             self.urc.shift_dr()
             self.urc.shift_dr()
-            print('dpc',{CMD},'is ',self.dmi_instruction_decode(self.urc.get_dr_out_string()))
         print('dpc is ',self.dmi_instruction_decode(self.urc.get_dr_out_string()))
         decode_value=self.dmi_instruction_decode(self.urc.get_dr_out_string())
         return decode_value
     def mepc_read(self):
+        mepc_read_cmd=self.dmi_instruction_generate(0x2, 0x34102E73, 0x20)
         CMD_MEPCREAD=[
-            0x80D04A41CE,  #csrw x5, mepc read mepc to x5
+            mepc_read_cmd,  #csrw t3, mepc read mepc to x3
             #0x800010900E,  # lw s0 0(s0)
             0x84004001CE,  # ebreak    progbuff1
             #memory_addr_int,  # write address in data 0
-            0x5C009C4022,  # copy dato 0 to s0 then exe progbuff0 and progbuff1
-            0x5c00884016,  # copy x5 to data0, transfer=1
+            0x5C009C4072,  # copy dato 0 to t3 then exe progbuff0 and progbuff1
+            0x5C00884072,  # copy t3 to data0
             0x1000000001,  # read dato0
             ]
         self.urc.set_instruction("DMI")
@@ -382,6 +497,245 @@ class UrjtagTermin():
         print('mepc is ',self.dmi_instruction_decode(self.urc.get_dr_out_string()))
         decode_value=self.dmi_instruction_decode(self.urc.get_dr_out_string())
         return decode_value
+    def mcause_read(self):
+        mcause_read_cmd=self.dmi_instruction_generate(0x2,0x34202E73,0x20)
+        CMD_MCAUSEREAD=[
+            mcause_read_cmd,    #csrw t3, mcause read mepc to t3
+            0x84004001CE,  # ebreak    progbuff1
+            #memory_addr_int,  # write address in data 0
+            0x5C009C4072,  # copy dato 0 to t3 then exe progbuff0 and progbuff1
+            0x5C00884072,  # copy t3 to data0
+            0x1000000001,  # read dato0
+            ]
+        self.urc.set_instruction("DMI")
+        self.urc.shift_ir()
+        for CMD in CMD_MCAUSEREAD:
+            self.urc.set_dr_in(CMD)
+            self.urc.shift_dr()
+            self.urc.shift_dr()
+        #print(self.urc.get_dr_out_string())
+        print('mcause is ',self.dmi_instruction_decode(self.urc.get_dr_out_string()))
+        decode_value=self.dmi_instruction_decode(self.urc.get_dr_out_string())
+
+        def detect_mcause(mcause):
+            """
+            根据输入的 mcause 值查找 NEORV32 Trap 信息，并返回格式化的结果字符串。
+            参数：
+              mcause: 整型，表示 mcause 的数值。
+            返回：
+              str，包含对应 Trap 信息的描述；若未找到，则提示未找到。
+            """
+            mcause_table = [
+                {"prio": 1, "mcause": 0x00000001, "trap_id": "TRAP_CODE_I_ACCESS", "cause": "instruction access fault",
+                 "mepc": "I-PC", "mtval": 0, "mtinst": "INS"},
+                {"prio": 2, "mcause": 0x00000002, "trap_id": "TRAP_CODE_I_ILLEGAL", "cause": "illegal instruction",
+                 "mepc": "PC", "mtval": 0, "mtinst": "INS"},
+                {"prio": 3, "mcause": 0x00000000, "trap_id": "TRAP_CODE_I_MISALIGNED",
+                 "cause": "instruction address misaligned", "mepc": "PC", "mtval": 0, "mtinst": "INS"},
+                {"prio": 4, "mcause": 0x0000000b, "trap_id": "TRAP_CODE_MENV_CALL",
+                 "cause": "environment call from M-mode", "mepc": "PC", "mtval": 0, "mtinst": "INS"},
+                {"prio": 5, "mcause": 0x00000008, "trap_id": "TRAP_CODE_UENV_CALL",
+                 "cause": "environment call from U-mode", "mepc": "PC", "mtval": 0, "mtinst": "INS"},
+                {"prio": 6, "mcause": 0x00000003, "trap_id": "TRAP_CODE_BREAKPOINT",
+                 "cause": "software breakpoint / trigger firing", "mepc": "PC", "mtval": 0, "mtinst": "INS"},
+                {"prio": 7, "mcause": 0x00000006, "trap_id": "TRAP_CODE_S_MISALIGNED",
+                 "cause": "store address misaligned", "mepc": "PC", "mtval": "ADR", "mtinst": "INS"},
+                {"prio": 8, "mcause": 0x00000004, "trap_id": "TRAP_CODE_L_MISALIGNED",
+                 "cause": "load address misaligned", "mepc": "PC", "mtval": "ADR", "mtinst": "INS"},
+                {"prio": 9, "mcause": 0x00000007, "trap_id": "TRAP_CODE_S_ACCESS", "cause": "store access fault",
+                 "mepc": "PC", "mtval": "ADR", "mtinst": "INS"},
+                {"prio": 10, "mcause": 0x00000005, "trap_id": "TRAP_CODE_L_ACCESS", "cause": "load access fault",
+                 "mepc": "PC", "mtval": "ADR", "mtinst": "INS"},
+                # Interrupts
+                {"prio": 11, "mcause": 0x80000010, "trap_id": "TRAP_CODE_FIRQ_0",
+                 "cause": "fast interrupt request channel 0", "mepc": "I-PC", "mtval": 0, "mtinst": 0},
+                {"prio": 12, "mcause": 0x80000011, "trap_id": "TRAP_CODE_FIRQ_1",
+                 "cause": "fast interrupt request channel 1", "mepc": "I-PC", "mtval": 0, "mtinst": 0},
+                {"prio": 13, "mcause": 0x80000012, "trap_id": "TRAP_CODE_FIRQ_2",
+                 "cause": "fast interrupt request channel 2", "mepc": "I-PC", "mtval": 0, "mtinst": 0},
+                {"prio": 14, "mcause": 0x80000013, "trap_id": "TRAP_CODE_FIRQ_3",
+                 "cause": "fast interrupt request channel 3", "mepc": "I-PC", "mtval": 0, "mtinst": 0},
+                {"prio": 15, "mcause": 0x80000014, "trap_id": "TRAP_CODE_FIRQ_4",
+                 "cause": "fast interrupt request channel 4", "mepc": "I-PC", "mtval": 0, "mtinst": 0},
+                {"prio": 16, "mcause": 0x80000015, "trap_id": "TRAP_CODE_FIRQ_5",
+                 "cause": "fast interrupt request channel 5", "mepc": "I-PC", "mtval": 0, "mtinst": 0},
+                {"prio": 17, "mcause": 0x80000016, "trap_id": "TRAP_CODE_FIRQ_6",
+                 "cause": "fast interrupt request channel 6", "mepc": "I-PC", "mtval": 0, "mtinst": 0},
+                {"prio": 18, "mcause": 0x80000017, "trap_id": "TRAP_CODE_FIRQ_7",
+                 "cause": "fast interrupt request channel 7", "mepc": "I-PC", "mtval": 0, "mtinst": 0},
+                {"prio": 19, "mcause": 0x80000018, "trap_id": "TRAP_CODE_FIRQ_8",
+                 "cause": "fast interrupt request channel 8", "mepc": "I-PC", "mtval": 0, "mtinst": 0},
+                {"prio": 20, "mcause": 0x80000019, "trap_id": "TRAP_CODE_FIRQ_9",
+                 "cause": "fast interrupt request channel 9", "mepc": "I-PC", "mtval": 0, "mtinst": 0},
+                {"prio": 21, "mcause": 0x8000001a, "trap_id": "TRAP_CODE_FIRQ_10",
+                 "cause": "fast interrupt request channel 10", "mepc": "I-PC", "mtval": 0, "mtinst": 0},
+                {"prio": 22, "mcause": 0x8000001b, "trap_id": "TRAP_CODE_FIRQ_11",
+                 "cause": "fast interrupt request channel 11", "mepc": "I-PC", "mtval": 0, "mtinst": 0},
+                {"prio": 23, "mcause": 0x8000001c, "trap_id": "TRAP_CODE_FIRQ_12",
+                 "cause": "fast interrupt request channel 12", "mepc": "I-PC", "mtval": 0, "mtinst": 0},
+                {"prio": 24, "mcause": 0x8000001d, "trap_id": "TRAP_CODE_FIRQ_13",
+                 "cause": "fast interrupt request channel 13", "mepc": "I-PC", "mtval": 0, "mtinst": 0},
+                {"prio": 25, "mcause": 0x8000001e, "trap_id": "TRAP_CODE_FIRQ_14",
+                 "cause": "fast interrupt request channel 14", "mepc": "I-PC", "mtval": 0, "mtinst": 0},
+                {"prio": 26, "mcause": 0x8000001f, "trap_id": "TRAP_CODE_FIRQ_15",
+                 "cause": "fast interrupt request channel 15", "mepc": "I-PC", "mtval": 0, "mtinst": 0},
+                {"prio": 27, "mcause": 0x8000000b, "trap_id": "TRAP_CODE_MEI",
+                 "cause": "machine external interrupt (MEI)", "mepc": "I-PC", "mtval": 0, "mtinst": 0},
+                {"prio": 28, "mcause": 0x80000003, "trap_id": "TRAP_CODE_MSI",
+                 "cause": "machine software interrupt (MSI)", "mepc": "I-PC", "mtval": 0, "mtinst": 0},
+                {"prio": 29, "mcause": 0x80000007, "trap_id": "TRAP_CODE_MTI", "cause": "machine timer interrupt (MTI)",
+                 "mepc": "I-PC", "mtval": 0, "mtinst": 0},
+            ]
+            for entry in mcause_table:
+                if entry["mcause"] == mcause:
+                    result = (
+                        f"Prio: {entry['prio']} "
+                        f"mcause: 0x{entry['mcause']:08x} "
+                        f"Trap ID: {entry['trap_id']} "
+                        f"Cause: {entry['cause']} "
+                        f"mepc: {entry['mepc']} "
+                        f"mtval: {entry['mtval']} "
+                        f"mtinst: {entry['mtinst']}"
+                    )
+                    return result
+            return f"未找到对应的 Trap 信息，mcause = 0x{mcause}"
+
+        # 测试该函数
+        info = detect_mcause(int(decode_value,16))
+        print("查询结果:")
+        print(info)
+        return decode_value
+    def machine_csr_read(self):
+        csrs = [
+            (0x300, "mstatus", "CSR_MSTATUS", "Machine status register - low word"),
+            (0x301, "misa", "CSR_MISA", "Machine CPU ISA and extensions"),
+            (0x304, "mie", "CSR_MIE", "Machine interrupt enable register"),
+            (0x305, "mtvec", "CSR_MTVEC", "Machine trap-handler base address for ALL traps"),
+            # (0x306, "mcounteren", "CSR_MCOUNTEREN", "Machine counter-enable register"),
+            (0x310, "mstatush", "CSR_MSTATUSH", "Machine status register - high word"),
+            # (0x30A, "menvcfg", "CSR_MENVCFG", "Machine environment configuration register - low word"),
+            # (0x31A, "menvcfgh", "CSR_MENVCFGH", "Machine environment configuration register - high word"),
+            (0x320, "mcountinhibit", "CSR_MCOUNTINHIBIT", "Machine counter-inhibit register"),
+            (0x340, "mscratch", "CSR_MSCRATCH", "Machine scratch register"),
+            (0x341, "mepc", "CSR_MEPC", "Machine exception program counter"),
+            (0x342, "mcause", "CSR_MCAUSE", "Machine trap cause"),
+            (0x343, "mtval", "CSR_MTVAL", "Machine trap value"),
+            (0x344, "mip", "CSR_MIP", "Machine interrupt pending register"),
+            (0x34A, "mtinst", "CSR_MTINST", "Machine trap instruction")
+        ]
+
+        messages = ''
+        commands = []
+        for addr, name_asm, name_c, desc in csrs:
+            #self.debug_status_reset()
+            instruction = (addr << 20) | 0x2FF3  # 生成 CSR 读取指令
+            cmd = self.dmi_instruction_generate(0x2, instruction, 0x20)
+            commands.append((addr, name_asm, name_c, cmd))
+            CMD_MCSRREAD = [
+                cmd,  # csrr x5, tdatareg read tdatareg to x5 progbuff0
+                0x84004001CE,  # ebreak    progbuff1
+                # 0x84000001CE,  # progbuff1 NOP
+                0x5C009C407E,  # copy dato 0 to t5 then exe progbuff0 and progbuff1
+                0x5C0088407E,  # copy t5 to data0, transfer=1
+                0x1000000001,  # read dato0
+            ]
+            self.urc.set_instruction("DMI")
+            self.urc.shift_ir()
+            for CMD in CMD_MCSRREAD:
+                self.urc.set_dr_in(CMD)
+                self.urc.shift_dr()
+                self.urc.shift_dr()
+            tdata = self.urc.get_dr_out_string()
+            decoded_value = self.dmi_instruction_decode(tdata)
+            #print(f"{name_asm:<13} = {decoded_value:>9} - {desc}")
+            messages += f"\n{name_asm:<13} = {decoded_value:>9}"
+            if addr == 0x342:
+                self.mcause_read()
+        commands.append(messages)
+        return commands
+    def counter_time_csr_read(self):
+        messages = ''
+        csrs = [
+        # Machine Counters and Timers (0xb00 - 0xb82)
+        (0xb00, "mcycle", "CSR_MCYCLE", "Machine Cycle Counter Low Word"),
+        (0xb02, "minstret", "CSR_MINSTRET", "Machine Instruction Retired Counter Low Word"),
+        (0xb80, "mcycleh", "CSR_MCYCLEH", "Machine Cycle Counter High Word"),
+        (0xb82, "minstreth", "CSR_MINSTRETH", "Machine Instruction Retired Counter High Word"),
+
+        # User-Level Counters and Timers (0xc00 - 0xc82)
+        (0xc00, "cycle", "CSR_CYCLE", "Cycle Counter Low Word"),
+        (0xc02, "instret", "CSR_INSTRET", "Instruction Retired Counter Low Word"),
+        (0xc80, "cycleh", "CSR_CYCLEH", "Cycle Counter High Word"),
+        (0xc82, "instreth", "CSR_INSTRETH", "Instruction Retired Counter High Word"),
+        ]
+        commands = []
+        for addr, name_asm, name_c, desc in csrs:
+            if addr == 0x342:
+                self.mcause_read()
+            else:
+                # self.debug_status_reset()
+                instruction = (addr << 20) | 0x2FF3  # 生成 CSR 读取指令
+                cmd = self.dmi_instruction_generate(0x2, instruction, 0x20)
+                commands.append((addr, name_asm, name_c, cmd))
+                CMD_MCSRREAD = [
+                    cmd,  # csrr x5, tdatareg read tdatareg to x5 progbuff0
+                    0x84004001CE,  # ebreak    progbuff1
+                    # 0x84000001CE,  # progbuff1 NOP
+                    0x5C009C407E,  # copy dato 0 to t5 then exe progbuff0 and progbuff1
+                    0x5C0088407E,  # copy t5 to data0, transfer=1
+                    0x1000000001,  # read dato0
+                ]
+                self.urc.set_instruction("DMI")
+                self.urc.shift_ir()
+                for CMD in CMD_MCSRREAD:
+                    self.urc.set_dr_in(CMD)
+                    self.urc.shift_dr()
+                    self.urc.shift_dr()
+                tdata = self.urc.get_dr_out_string()
+                decoded_value = self.dmi_instruction_decode(tdata)
+                #print(f"{name_asm} = {decoded_value} - {desc}")
+                #print(f"{name_asm:<13} = {decoded_value:>9} - {desc}")
+                messages += f"\n{name_asm:<13} = {decoded_value:>9}"
+        commands.append(messages)
+        return commands
+    def machine_info_csr_read(self):
+        messages = ''
+        csrs = [
+            (0xf11, "mvendorid", "CSR_MVENDORID"),
+            (0xf12, "marchid", "CSR_MARCHID"),
+            (0xf13, "mimpid", "CSR_MIMPID"),
+            (0xf14, "mhartid", "CSR_MHARTID"),
+            (0xf15, "mconfigptr", "CSR_MCONFIGPTR"),
+        ]
+        commands = []
+        for addr, name, desc in csrs:
+            if addr == 0x342:
+                self.mcause_read()
+            else:
+                #self.debug_status_reset()
+                instruction = (addr << 20) | 0x2FF3  # 生成 CSR 读取指令
+                cmd = self.dmi_instruction_generate(0x2, instruction, 0x20)
+                commands.append((addr, name, desc, cmd))
+                CMD_MCSRREAD = [
+                    cmd,  # csrr x5, tdatareg read tdatareg to x5 progbuff0
+                    0x84004001CE,  # ebreak    progbuff1
+                    # 0x84000001CE,  # progbuff1 NOP
+                    0x5C009C407E,  # copy dato 0 to t5 then exe progbuff0 and progbuff1
+                    0x5C0088407E,  # copy t5 to data0, transfer=1
+                    0x1000000001,  # read dato0
+                ]
+                self.urc.set_instruction("DMI")
+                self.urc.shift_ir()
+                for CMD in CMD_MCSRREAD:
+                    self.urc.set_dr_in(CMD)
+                    self.urc.shift_dr()
+                    self.urc.shift_dr()
+                tdata = self.urc.get_dr_out_string()
+                decoded_value = self.dmi_instruction_decode(tdata)
+                #print(f"{name} = {decoded_value}")
+                messages += f"\n{name_asm:<13} = {decoded_value:>9}"
+        commands.append(messages)
+        return commands
     def dpc_set(self,address=None):
         if address is None:
             dpc_step_set=0x1000000002
@@ -408,28 +762,27 @@ class UrjtagTermin():
         address=self.dmi_instruction_decode(dpc_step_set)
         print(f"dpc is set to {hex(address)}")
         self.dpc_read()
-    def dpc_step(self, dpc_value):
-        # 将 dpc_value 转换为整数，增加 4
-        dpc_int = int(dpc_value, 16) + 4
-
-        # 将结果转换回 8 位的 16 进制字符串（没有前缀 0x）
-        new_dpc = f"{dpc_int:08X}"
-
-        print(dpc_int)  # 打印调试信息
-        return dpc_int
     def gpio_read(self):
-        gpio_in = 0xfff00000
-        gpio_out = 0xfff00004
-        cmd = [gpio_in, gpio_out]
-        #cmd = [gpio_in]
-        names = ["gpio_in", "gpio_out",]# 给每个元素一个名称
-        #names = ["gpio_in"]  # 给每个元素一个名称
-        s=''
-        for name, i in zip(names, cmd):
-            s+=f"{name} is\n {self.lookmem(i)[-8:]}\n"
-        self.debug_status_detect()
-        print(s)
-        return s
+        gpio_2 = self.dmi_instruction_generate(0x2, 0x00FAF03, 0x20)
+        dpc_step_set=self.dmi_instruction_generate(0x2,0xfffffc08,0x04)
+        CMD_L=[
+            gpio_2, #lw   t5, 0(a0) giop output
+            #0x81EC4A41CE,  # csrr a0, data0
+            0x84004001CE,  # ebreak    progbuff1
+            dpc_step_set,  # gpio address in data 0
+            0x5C009C407E,  # copy dato 0 to t6 then exe progbuff0 and progbuff1
+            0x5C0088407A,  # copy t5 to data0, transfer=1
+            0x1000000001,  # read dato0
+            ]
+        self.urc.set_instruction("DMI")
+        self.urc.shift_ir()
+        for CMD in CMD_L:
+            self.urc.set_dr_in(CMD)
+            self.urc.shift_dr()
+            self.urc.shift_dr()
+        print('gpio is ', self.dmi_instruction_decode(self.urc.get_dr_out_string()))
+        decode_value = self.dmi_instruction_decode(self.urc.get_dr_out_string())
+        return decode_value
     def dret(self):
         CMD_DRET=[
             0x80000001CE, # dret in progbuff0
@@ -495,9 +848,10 @@ if __name__ == "__main__":
     #Urjtag_T.connection_detect()
     #Urjtag_T.haltresumereq()
     #Urjtag_T.lookmem_range(0x00000000,0x00000040)
-    #Urjtag_T.lookmem(0xfffff7a0)
     Urjtag_T.haltreq()
-    #Urjtag_T.dcsr_detect()
-    Urjtag_T.gpio_read()
+
+    a=Urjtag_T.trigger_tdata1_detect()
+    print(a[0][-1])
+    #Urjtag_T.gpio_read()
     #Urjtag_T.dcsr_detect()
     Urjtag_T.haltresumereq()

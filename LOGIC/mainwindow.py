@@ -11,9 +11,15 @@ import serial
 from GUI.ui_MainWindow import *
 #from GUI.ui_BreakPointDialog import *
 from GUI.ui_PortSelect import *
+from GUI.setting import *
 from LOGIC.BreakPointDialog import *
 from LOGIC.PortSent import *
+
+import timeit
 from PyQt5.QtSerialPort import QSerialPortInfo, QSerialPort
+
+from LOGIC.settingdialog import SettingDialog
+
 serial_is_open = False
 class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     sign_one = pyqtSignal(str)
@@ -45,12 +51,15 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.actionExternal_RAM.toggled.connect(self.get_ram_model)
         self.actionCode_Memory.toggled.connect(self.get_ram_model)
         self.actionRefresh_Display.triggered.connect(self.Refresh_Display)
-        self.signal_RAM_model.connect(lambda Model: self.PortSelect.get_RAM(Model=Model))
+        self.pushButton_lookmem.clicked.connect(self.look_up_memory)
+        self.pushButton_setmem.clicked.connect(self.set_memory)
+        #self.signal_RAM_model.connect(lambda Model: self.PortSelect.get_RAM(Model=Model))
        # self.actionLoad.triggered.connect(self.upload)
-        self.actionRun.triggered.connect(self.PortSelect.run_code)
-        self.actionStep_Run.triggered.connect(self.PortSelect.run_step_code)
+        #self.actionRun.triggered.connect(self.PortSelect.run_code)
+        self.actionRun.triggered.connect(lambda: self.PortSelect.run_code(self.setting.run_option()))
+        self.actionStep_Run.triggered.connect(lambda: self.PortSelect.run_step_code(self.setting.run_option()))
+        #self.actionStep_Run.triggered.connect(self.runtime_test)
 
-        self.actionStep_Run.triggered.connect(self.get_gpio)
         #self.actionStep_Function_Run.triggered.connect(self.PortSelect.run_step_function_code)
         self.actionUpdate_RAM.triggered.connect(self.get_RAM)
         self.actionUpdate_Port.triggered.connect(self.get_IO)
@@ -58,19 +67,25 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         #self.actionMake_BreakPoint.triggered.connect(self.BreakPoint.read_BreakPoints)
         self.actionClean_All_Break_Point.triggered.connect(self.clean_all_break_point)
         self.actionSet_dpc.triggered.connect(self.PortSelect.set_dpc)
+        self.comboBox_memorymodel.currentIndexChanged.connect(self.get_RAM)
+        self.actionSetting.triggered.connect(self.setting_show)
+        self.verticalScrollBar_RAM.valueChanged.connect(self.on_sroll)
+        self.scroll_timer.timeout.connect(self.get_ScrollBar)
+        self.ScrollBar_RAM.connect(self.PortSelect.get_RAM)
 
         #self.actionClean_All_Break_Point.triggered.connect(self.clean_all_breakpoint_text)
         # Breakpoint model signal connect
         self.PortSelect.text_receive_register.connect(self.set_register)
         self.PortSelect.text_receive_RAM.connect(self.set_RAM)
+        self.PortSelect.signal_label_Port.connect(self.get_gpio)
         self.PortSelect.text_receive_IO.connect(self.set_IO)
-        self.verticalScrollBar_RAM.valueChanged.connect(self.on_sroll)
-        self.scroll_timer.timeout.connect(self.get_ScrollBar)
-        self.ScrollBar_RAM.connect(self.PortSelect.get_RAM)
+
         #self.PortSelect.text_receive_Breakpoint.connect(self.BreakPoint.set_BreakPoints_text)
+        self.PortSelect.run_porcess_thread.signal_run_process.connect(self.set_processbar)
         self.PortSelect.signal_get_register.connect(self.get_register)
         self.PortSelect.signal_get_RAM.connect(self.get_RAM)
-        self.PortSelect.signal_get_dpc.connect(self.update_dpc)
+        self.PortSelect.signal_csr_info.connect(self.csr_info_update)
+        self.PortSelect.signal_get_dpc.connect(self.set_hightlight)
         self.PortSelect.signal_get_IO.connect(self.get_IO)
         self.PortSelect.signal_refresh.connect(self.Refresh_Display)
         self.PortSelect.BP_signal.connect(self.make_breakpoint_text)
@@ -82,11 +97,16 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         #StatusBar model signal connect
         self.PortSelect.signal_status_bar.connect(self.statusBar_show)
 
+        # self.setting.signal_update_csr_option.connect(lambda run_option :self.PortSelect.run_step_code(run_option=run_option))
+        # self.setting.signal_update_csr_option.connect(lambda run_option :self.PortSelect.run_code(run_option=run_option))
+
     def CreateItems(self):
         self.PortSelect = PortSelectDialog()
         self.BreakPoint = BreakPointDialog()
+        self.setting=SettingDialog()
         self.scroll_timer = QTimer(self)
         self.scroll_timer.setSingleShot(True)
+
     def PortSent_show(self):
         # 创建子窗口实例
         self.PortSelect.show()
@@ -103,6 +123,11 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         #bk = BreakPointDialog()
         self.BreakPoint.show()
         self.statusBar_show('Breakpoint window is open')
+        self.PortSelect.exec_()
+    def setting_show(self):
+        self.setting.show()
+        self.statusBar_show('Breakpoint window is open')
+        self.setting.exec_()
     def statusBar_show(self,message, show_time=None):
         if show_time is None:
             self.statusbar.showMessage(message,1000)
@@ -112,6 +137,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 ######Breakpoint functions##############################################################################################
     def reset_chip(self):
         self.PortSelect.set_reset()
+    def set_processbar(self,processbar):
+        print(processbar)
+        self.progressBar.setValue(processbar)
     def SetListwidget(self):
         self.listWidget_ASM.setContextMenuPolicy(Qt.CustomContextMenu)
         self.listWidget_ASM.customContextMenuRequested.connect(self.show_context_menu)
@@ -119,6 +147,18 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.breakpoints = []
         # 创建QLineEdit列表
         #self.lineEdits = [getattr(self.BreakPoint, f'lineEdit_{i:02d}') for i in range(10)]
+    def look_up_memory(self):
+        self.PortSelect.urc.haltreq()
+        self.PortSelect.urc.debug_status_reset()
+        address = int(self.lineEdit_lookmem_address.text(),16)
+        value = self.PortSelect.urc.lookmem(address)
+        self.label_Lookmemvalue.setText(value[-8:])
+    def set_memory(self):
+        self.PortSelect.urc.haltreq()
+        self.PortSelect.urc.debug_status_reset()
+        address = int(self.lineEdit_setmem_address.text(),16)
+        value = int(self.lineEdit_setmem_value.text(),16)
+        s = self.PortSelect.urc.setmem(address,value)
     def show_context_menu(self, position):
         # 创建上下文菜单
         menu = QMenu()
@@ -200,17 +240,18 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def add_breakpoint(self, item):
         item_text = item.text()
         address_part = item_text.split(":")[0].strip()
-        BP_signal = int(address_part,16)
-        # 调用设置断点的方法，并传递 BP_signal 作为参数
-        s=self.PortSelect.set_breakpoint(BP_signal)
+        breakpoint_address_int = int(address_part,16)
+        breakpoint_address_hex = hex(breakpoint_address_int)
+        # 调用设置断点的方法，并传递 breakpoint_address_int 作为参数
+        s=self.PortSelect.set_breakpoint(breakpoint_address_int)
         self.statusBar_show(f'Set breakpoint at: {item_text}')
         if s == None:
-            if BP_signal not in self.breakpoints:
+            if breakpoint_address_int not in self.breakpoints:
                 if "Deleted" in self.breakpoints :
                     deleted_index=(self.breakpoints.index("Deleted"))
-                    self.breakpoints[deleted_index] = BP_signal
+                    self.breakpoints[deleted_index] = breakpoint_address_int
                 else:
-                    self.breakpoints += [hex(BP_signal)]
+                    self.breakpoints += [breakpoint_address_hex]
             if ' [Breakpoint]' not in item_text:
                 item.setText(f"{item_text} [Breakpoint] [Enable]")
             else:
@@ -224,16 +265,16 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def remove_breakpoint(self, item):
         item_text = item.text()
         address_part = item_text.split(":")[0].strip()
-        BP_Addtrss_int = int(address_part,16)
-        BP_Addtrss = hex(BP_Addtrss_int)
-        if BP_Addtrss in self.breakpoints:
-            BP_signal=self.breakpoints.index(BP_Addtrss)
-            self.breakpoints[BP_signal]="Deleted"
-            print(self.breakpoints[BP_signal])
-            s = self.PortSelect.remove_breakpoint(BP_Addtrss_int)
+        breakpoint_address_int = int(address_part,16)
+        breakpoint_address_hex = hex(breakpoint_address_int)
+        if breakpoint_address_hex in self.breakpoints:
+            breakpoint_index=self.breakpoints.index(breakpoint_address_hex)
+            self.breakpoints[breakpoint_index]="Deleted"
+            print(self.breakpoints[breakpoint_index])
+            s = self.PortSelect.remove_breakpoint(breakpoint_address_int)
             print(f'Removed breakpoint at: {item_text}')
             self.statusBar_show(f'Removed breakpoint at: {item_text}')
-            if s == None:
+            if s is None:
                 if ' [Breakpoint] [Enable]' in item_text:
                     item.setText(item_text.replace(' [Breakpoint] [Enable]', ''))
                     # self.breakpoints.remove(item_text.replace(' [Breakpoint]', ''))
@@ -243,22 +284,21 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                     QMessageBox.warning(self, "Warning", "There is no Breakpoint.")
                 print(f'Breakpoint list is {self.breakpoints}.')
         else:
-            s = self.PortSelect.remove_breakpoint(BP_Addtrss_int)
-            return
+            s = self.PortSelect.remove_breakpoint(breakpoint_address_int)
+            return s
 
 
     def enable_breakpoint(self, item):
         item_text = item.text()
-        address_part = item_text[0:4]
-        BP_Addtrss = address_part
-        if self.PortSelect.com.is_open == False:
-            QMessageBox.warning(self, "Warning", "Please open the Serial Port.")
-        elif BP_Addtrss in self.breakpoints:
-            BP_signal=self.breakpoints.index(BP_Addtrss)
-            s = self.PortSelect.Enable_Breakpoint(BP_signal)
+        address_part = item_text.split(":")[0].strip()
+        breakpoint_address_int = int(address_part,16)
+        breakpoint_address_hex = hex(breakpoint_address_int)
+        if breakpoint_address_hex in self.breakpoints:
+            breakpoint_index=self.breakpoints.index(breakpoint_address_hex)
+            s = self.PortSelect.enable_breakpoint(breakpoint_index)
             print(f'Enable breakpoint at: {item_text}')
             self.statusBar_show(f'Enable breakpoint at: {item_text}')
-            if s == None:
+            if s is None:
                 if ' [Breakpoint]' not in item_text:
                     QMessageBox.warning(self, "Warning", "There is no Breakpoint.")
                 elif ' [Breakpoint] [Enable]'  in item_text:
@@ -278,16 +318,15 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
     def disable_breakpoint(self, item):
         item_text = item.text()
-        address_part = item_text[0:4]
-        BP_Addtrss = address_part
-        if self.PortSelect.com.is_open == False:
-            QMessageBox.warning(self, "Warning", "Please open the Serial Port.")
-        elif BP_Addtrss in self.breakpoints:
-            BP_signal=self.breakpoints.index(BP_Addtrss)
-            s = self.PortSelect.Disable_Breakpoint(BP_signal)
+        address_part = item_text.split(":")[0].strip()
+        breakpoint_address_int = int(address_part,16)
+        breakpoint_address_hex = hex(breakpoint_address_int)
+        if breakpoint_address_hex in self.breakpoints:
+            breakpoint_index=self.breakpoints.index(breakpoint_address_hex)
+            s = self.PortSelect.disable_breakpoint(breakpoint_index)
             print(f'Disable breakpoint at: {item_text}')
             self.statusBar_show(f'Disable breakpoint at: {item_text}')
-            if s == None:
+            if s is None:
                 if ' [Breakpoint]' not in item_text:
                     QMessageBox.warning(self, "Warning", "There is no Breakpoint.")
                 else:
@@ -314,25 +353,37 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         s = self.verticalScrollBar_RAM.sliderPosition() #获取Scrollbar信息
         self.ScrollBar_RAM.emit(s)
 
-    def update_dpc(self, dpc_read):
-        self.label_dpc.setText(dpc_read)
-    def get_gpio(self):
-        #self.label_Port.setText(self.PortSelect.urc.gpio_read())
+    def csr_info_update(self, csr_info):
+        self.label_dpc.setText(csr_info)
+    def get_gpio(self,message):
+        self.label_Port.setText(message)
         return
     def get_ram_model(self):
-        sender = self.sender()
-        if sender == self.actionCode_Memory:
-            print("Code Memory selected")
-            self.label_RAM_model.setText('Memory model: Display program memory area')
-            self.signal_RAM_model.emit('DC')
-            self.verticalScrollBar_RAM.setMaximum(67108863)#0000-ffff
-            return 'DC'
+        match self.comboBox_memorymodel.currentIndex():
+            case 0:
+                print("Code Memory selected")
+                self.label_RAM_model.setText('Memory model: Display program memory area')
+                #self.signal_RAM_model.emit('IMEM')
+                self.verticalScrollBar_RAM.setMaximum(255)  # 0000-3fff
+                return 'IMEM'
+            case 1:
+                print("Direct InRAM selected")
+                self.label_RAM_model.setText('Memory model: Display internal data memory area')
+                #self.signal_RAM_model.emit('DMEM')
+                self.verticalScrollBar_RAM.setMaximum(127)  # 0000-1fff
+                return 'DMEM'
+        # elif sender == self.actionCode_Memory:
+        #     print("Code Memory selected")
+        #     self.label_RAM_model.setText('Memory model: Display program memory area')
+        #     self.signal_RAM_model.emit('IMEM')
+        #     self.verticalScrollBar_RAM.setMaximum(255)#0000-3fff
+        #     return 'IMEM'
         # elif sender == self.actionDirect_InRAM:
         #     print("Direct InRAM selected")
         #     self.label_RAM_model.setText('Memory model: Display internal data memory area')
-        #     self.signal_RAM_model.emit('DD')
-        #     self.verticalScrollBar_RAM.setMaximum(3)#0000-00ff
-        #     return 'DD'
+        #     self.signal_RAM_model.emit('DMEM')
+        #     self.verticalScrollBar_RAM.setMaximum(127)#0000-1fff
+        #     return 'DMEM'
         # elif sender == self.actionIndirect_InRAM:
         #     print("Indirect InRAM selected")
         #     self.label_RAM_model.setText('Memory model: Display indirect data memory area ')
@@ -345,12 +396,15 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         #     self.signal_RAM_model.emit('DX')
         #     self.verticalScrollBar_RAM.setMaximum(1023)#0000-ffff
         #     return 'DX'
+        #elif sender == self.get_RAM():
+
     def get_RAM(self):
             print("> Starting get RAM... ")
             self.statusBar_show("Getting RAM",1000)
             Scroll_Value = self.verticalScrollBar_RAM.value()
             #print(Scroll_Value)
-            s = self.PortSelect.get_RAM(Scroll_Value)
+            ram_model = self.get_ram_model()
+            s = self.PortSelect.get_RAM(Scroll_Value,ram_model)
             if s == "":
                 QMessageBox.warning(self,"Warning","Could not get RAM. Please check the connection.")
                 return
@@ -436,7 +490,26 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 self.statusBar_show("Successful: File '{}' is open".format(asmfile_dir))
             return asmfile_dir
 
-######Date processing and displaying functions##############################################################################################
+    def set_hightlight(self, pc):
+        self.statusBar_show("Hightlighting ProgramCounter")
+        for index in range(self.listWidget_ASM.count()):
+            item = self.listWidget_ASM.item(index)
+            # 设置背景颜色
+            Background = QBrush(QColor(255, 255, 255, 255))  # 黄色，带有一些透明度
+            item.setBackground(Background)
+        pc_str=pc
+        ProgramCounter = str(hex(int(pc_str,16)))
+        text_to_find = ProgramCounter[2:] + ":"
+        for index in range(self.listWidget_ASM.count()):
+            item = self.listWidget_ASM.item(index)
+            item_text = item.text().lstrip()
+            if text_to_find in item_text and item_text.startswith(text_to_find):
+                self.listWidget_ASM.scrollToItem(item)
+                # 设置背景颜色
+                brush = QBrush(QColor(255, 255, 0, 160))  # 黄色，带有一些透明度
+                item.setBackground(brush)
+
+    ######Date processing and displaying functions##############################################################################################
     def set_RAM(self, message):
         s = message  # 去掉#
         '''
@@ -478,29 +551,6 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 formatted_lines.append(f"{address}: {hex_values[0:11]}|{hex_values[11:22]}|{hex_values[22:33]}|{hex_values[33:]} |{ascii_values}|")
         print("\n".join(formatted_lines))
         d="\n".join(formatted_lines)
-        # bar = '-'  # add separator every 8 bits of HEX
-        # star = '|'  # split ASCII area separator
-        # c = str.splitlines(s)  # split the list of numbers into strings
-        # d = ''
-        # e = '\r\n'
-        # for line in c:
-        #     line = line.split()  # split the string into single lines
-        #     line_list = list(line)  # split each line into single bytes
-        #     ascii_list = []
-        #     for hex_str in line_list[1:]:
-        #         char = chr(int(hex_str, 16))
-        #         if char.isprintable():  # determine whether the ASCII code is visible
-        #             ascii_list.append(char)
-        #         else:
-        #             ascii_list.append('.')  # replace invisible with '.'
-        #     line_list.insert(9, bar)  # Add separator
-        #     line_hex = ' '.join(line_list)
-        #     line_ascii = ''.join(ascii_list)
-        #     d = d + line_hex + ' ' + star + line_ascii + star + e
-        # # print(d)
-        # # print(d)
-        # # print(repr(d))
-        # # print(ascii_list)
         self.label_RAM.setText(d)
         return s
 
@@ -543,34 +593,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.label_Port.setText(d)
         return d
     def set_register(self, message):
-        # message=self.PortSelect.text_receive
-        #message = message[:-1]#去掉#
-        #message = message[3:]#去掉X\r\n
-        #message.replace('\r', '')
         self.label_Reg.setText(message)
         return message
-    #def register_value= a
-    #return register_value
-    def get_ProgramCounter(self, message=None):
-        self.statusBar_show("Getting ProgramCounter")
-        #message = "X\r\nRA RB R0 R1 R2 R3 R4 R5 R6 R7 PSW DPTR SP PC\r\nFF FF FF FF FF FF FF FF FF FF ---R0--- 0000 07 0010 \r\n#"
-        if message != None:
-            message = message[:-1]  # 去掉#
-            message = message[3:]  # 去掉X\r\n
-            message.replace('\r', '')
-            message.replace('\n', '')
-            parts = message.split()
-            reversed_parts = reversed(parts)
-            for part in reversed_parts:
-                if len(part) == 4 and part.isalnum() and part.lower().isalpha() == False:  # 检查是否为4位非字母字符
-                    PC= part
-                    #print('PC='+PC+'\n')  # 输出: 0000
-                    break
-                else:
-                    PC = '0000'
-            self.ProgramCounter.emit(PC)
-        else:
-            return
+
     def set_Hightlight(self, PC=None,BP=None):
         self.statusBar_show("Hightlighting ProgramCounter")
         for index in range(self.listWidget_ASM.count()):

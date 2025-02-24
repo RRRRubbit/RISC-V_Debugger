@@ -12,8 +12,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1623</width>
-    <height>848</height>
+    <width>1618</width>
+    <height>887</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -39,50 +39,10 @@
     </size>
    </property>
    <layout class="QGridLayout" name="gridLayout_2">
-    <item row="0" column="0">
-     <layout class="QGridLayout" name="gridLayout" rowstretch="1,0">
-      <item row="0" column="0">
-       <widget class="QLabel" name="label_Reg">
-        <property name="sizePolicy">
-         <sizepolicy hsizetype="Expanding" vsizetype="MinimumExpanding">
-          <horstretch>0</horstretch>
-          <verstretch>0</verstretch>
-         </sizepolicy>
-        </property>
-        <property name="minimumSize">
-         <size>
-          <width>1200</width>
-          <height>80</height>
-         </size>
-        </property>
-        <property name="maximumSize">
-         <size>
-          <width>16777215</width>
-          <height>60</height>
-         </size>
-        </property>
-        <property name="font">
-         <font>
-          <family>Liberation Mono</family>
-          <pointsize>11</pointsize>
-          <weight>75</weight>
-          <bold>true</bold>
-         </font>
-        </property>
-        <property name="text">
-         <string>X00(zero)  X01(ra)    X02(sp)    X03(gp)    X04(tp)    X05(t0)    X06(t1)    X07(t2)    X08(s0/fp) X09(s1)    X10(a0)    X11(a1)    X12(a2)    X13(a3)    X14(a4)    X15(a5)    
-0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 
-X16(a6)    X17(a7)    X18(s2)    X19(s3)    X20(s4)    X21(s5)    X22(s6)    X23(s7)    X24(s8)    X25(s9)    X26(s10)   X27(s11)   X28(t3)    X29(t4)    X30(t5)    X31(t6)
-0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000
-</string>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="0">
-       <layout class="QVBoxLayout" name="verticalLayout" stretch="16,1,8">
+    <item row="1" column="0">
+     <layout class="QGridLayout" name="gridLayout" rowstretch="1,0,0">
+      <item row="2" column="0">
+       <layout class="QVBoxLayout" name="verticalLayout" stretch="16,0,8">
         <item>
          <layout class="QHBoxLayout" name="horizontalLayout">
           <item>
@@ -117,6 +77,32 @@ X16(a6)    X17(a7)    X18(s2)    X19(s3)    X20(s4)    X21(s5)    X22(s6)    X23
           <item>
            <layout class="QVBoxLayout" name="verticalLayout_2">
             <item>
+             <widget class="QProgressBar" name="progressBar">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>16777215</width>
+                <height>10</height>
+               </size>
+              </property>
+              <property name="value">
+               <number>0</number>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="label">
+              <property name="text">
+               <string>CSR</string>
+              </property>
+             </widget>
+            </item>
+            <item>
              <widget class="QLabel" name="label_dpc">
               <property name="font">
                <font>
@@ -131,24 +117,19 @@ X16(a6)    X17(a7)    X18(s2)    X19(s3)    X20(s4)    X21(s5)    X22(s6)    X23
              </widget>
             </item>
             <item>
+             <widget class="QLabel" name="label_2">
+              <property name="text">
+               <string>GPIO</string>
+              </property>
+             </widget>
+            </item>
+            <item>
              <widget class="QLabel" name="label_Port">
               <property name="sizePolicy">
                <sizepolicy hsizetype="Fixed" vsizetype="Expanding">
                 <horstretch>0</horstretch>
                 <verstretch>0</verstretch>
                </sizepolicy>
-              </property>
-              <property name="minimumSize">
-               <size>
-                <width>140</width>
-                <height>300</height>
-               </size>
-              </property>
-              <property name="maximumSize">
-               <size>
-                <width>140</width>
-                <height>16777215</height>
-               </size>
               </property>
               <property name="font">
                <font>
@@ -187,19 +168,133 @@ P5 = 00000000
          </layout>
         </item>
         <item>
-         <widget class="QLabel" name="label_RAM_model">
-          <property name="font">
-           <font>
-            <family>Courier New</family>
-            <pointsize>14</pointsize>
-            <weight>50</weight>
-            <bold>false</bold>
-           </font>
-          </property>
-          <property name="text">
-           <string>Memory model: Display program memory area</string>
-          </property>
-         </widget>
+         <layout class="QGridLayout" name="gridLayout_4">
+          <item row="1" column="0">
+           <widget class="QLabel" name="label_Lookupmemory">
+            <property name="text">
+             <string>Look Up Memory</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="3">
+           <widget class="QPushButton" name="pushButton_setmem">
+            <property name="text">
+             <string>OK</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <widget class="QLineEdit" name="lineEdit_lookmem_address">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="inputMask">
+             <string extracomment="address(hex)">HHHHHHHH</string>
+            </property>
+            <property name="text">
+             <string>a</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="2">
+           <widget class="QLineEdit" name="lineEdit_setmem_value">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="inputMask">
+             <string>HHHHHHHH</string>
+            </property>
+            <property name="text">
+             <string>a</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="3">
+           <widget class="QPushButton" name="pushButton_lookmem">
+            <property name="text">
+             <string>OK</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="2">
+           <widget class="QLabel" name="label_Lookmemvalue">
+            <property name="text">
+             <string>value</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="0">
+           <widget class="QLabel" name="label_RAM_model">
+            <property name="font">
+             <font>
+              <family>Courier New</family>
+              <pointsize>14</pointsize>
+              <weight>50</weight>
+              <bold>false</bold>
+             </font>
+            </property>
+            <property name="text">
+             <string>Memory model: Display program memory area</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="0">
+           <widget class="QLabel" name="label_Setmemory">
+            <property name="text">
+             <string>Set Memory</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QLineEdit" name="lineEdit_setmem_address">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="minimumSize">
+             <size>
+              <width>20</width>
+              <height>20</height>
+             </size>
+            </property>
+            <property name="inputMask">
+             <string comment="address(hex)">HHHHHHHH</string>
+            </property>
+            <property name="text">
+             <string>a</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="1">
+           <widget class="QComboBox" name="comboBox_memorymodel">
+            <item>
+             <property name="text">
+              <string>Instruction memory (0x00000000-0x00003fff)</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Data memory (0x80000000-0x80001fff)</string>
+             </property>
+            </item>
+           </widget>
+          </item>
+          <item row="2" column="3">
+           <widget class="QPushButton" name="pushButton">
+            <property name="text">
+             <string>Refresh</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
         </item>
         <item>
          <layout class="QHBoxLayout" name="horizontalLayout_RAM" stretch="0,0">
@@ -302,6 +397,46 @@ C:0030: 00 00 00 00 00 00 00 00 - 00 00 00 00 00 00 00 00 |................|</st
         </item>
        </layout>
       </item>
+      <item row="0" column="0">
+       <widget class="QLabel" name="label_Reg">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Expanding" vsizetype="MinimumExpanding">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>1200</width>
+          <height>80</height>
+         </size>
+        </property>
+        <property name="maximumSize">
+         <size>
+          <width>16777215</width>
+          <height>60</height>
+         </size>
+        </property>
+        <property name="font">
+         <font>
+          <family>Liberation Mono</family>
+          <pointsize>11</pointsize>
+          <weight>75</weight>
+          <bold>true</bold>
+         </font>
+        </property>
+        <property name="text">
+         <string>X00(zero)  X01(ra)    X02(sp)    X03(gp)    X04(tp)    X05(t0)    X06(t1)    X07(t2)    X08(s0/fp) X09(s1)    X10(a0)    X11(a1)    X12(a2)    X13(a3)    X14(a4)    X15(a5)    
+0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 
+X16(a6)    X17(a7)    X18(s2)    X19(s3)    X20(s4)    X21(s5)    X22(s6)    X23(s7)    X24(s8)    X25(s9)    X26(s10)   X27(s11)   X28(t3)    X29(t4)    X30(t5)    X31(t6)
+0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000
+</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+        </property>
+       </widget>
+      </item>
      </layout>
     </item>
    </layout>
@@ -311,7 +446,7 @@ C:0030: 00 00 00 00 00 00 00 00 - 00 00 00 00 00 00 00 00 |................|</st
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1623</width>
+     <width>1618</width>
      <height>28</height>
     </rect>
    </property>
@@ -321,6 +456,8 @@ C:0030: 00 00 00 00 00 00 00 00 - 00 00 00 00 00 00 00 00 |................|</st
     </property>
     <addaction name="actionOpen"/>
     <addaction name="actionLoad"/>
+    <addaction name="separator"/>
+    <addaction name="actionSetting"/>
    </widget>
    <widget class="QMenu" name="menuRun">
     <property name="title">
@@ -537,7 +674,10 @@ C:0030: 00 00 00 00 00 00 00 00 - 00 00 00 00 00 00 00 00 |................|</st
     <bool>true</bool>
    </property>
    <property name="checked">
-    <bool>true</bool>
+    <bool>false</bool>
+   </property>
+   <property name="enabled">
+    <bool>false</bool>
    </property>
    <property name="text">
     <string>Code Memory</string>
@@ -566,6 +706,11 @@ C:0030: 00 00 00 00 00 00 00 00 - 00 00 00 00 00 00 00 00 |................|</st
   <action name="actionView_address">
    <property name="text">
     <string>View address</string>
+   </property>
+  </action>
+  <action name="actionSetting">
+   <property name="text">
+    <string>Setting</string>
    </property>
   </action>
  </widget>
