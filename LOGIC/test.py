@@ -1,34 +1,76 @@
-import sys
-from PyQt5.QtWidgets import QApplication, QDialog, QGridLayout, QLabel, QLineEdit, QPushButton
+from PyQt5.QtCore import Qt, QRect, QRegularExpression
+from PyQt5.QtGui import QColor, QPainter, QTextCursor, QTextCharFormat
+from PyQt5.QtWidgets import QApplication, QMainWindow, QPlainTextEdit, QVBoxLayout, QWidget
 
-class MyDialog(QDialog):
+
+class CodeEditor(QPlainTextEdit):
     def __init__(self):
         super().__init__()
 
-        self.setWindowTitle("QGridLayout 自适应")
-        self.resize(400, 200)
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        # 重新设置行号区域的宽度
+        self.lineNumberArea.setGeometry(QRect(0, 0, self.lineNumberAreaWidth(), self.height()))
 
-        # 创建网格布局
-        layout = QGridLayout()
 
-        # 标签 + 输入框
-        layout.addWidget(QLabel("用户名:"), 0, 0)
-        self.username = QLineEdit()
-        layout.addWidget(self.username, 0, 1)
+class LineNumberArea(QWidget):
+    def __init__(self, editor):
+        super().__init__(editor)
+        self.editor = editor
 
-        layout.addWidget(QLabel("密码:"), 1, 0)
-        self.password = QLineEdit()
-        self.password.setEchoMode(QLineEdit.EchoMode.Password)
-        layout.addWidget(self.password, 1, 1)
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.fillRect(event.rect(), QColor(240, 240, 240))  # 背景颜色
+        painter.setPen(QColor(120, 120, 120))  # 行号的颜色
 
-        # 按钮
-        self.ok_button = QPushButton("登录")
-        layout.addWidget(self.ok_button, 2, 0, 1, 2)  # 按钮跨两列
+        block = self.editor.firstVisibleBlock()  # 获取文本框中第一个可见的块
+        blockNumber = block.blockNumber()  # 获取块的行号
+        top = self.editor.blockBoundingGeometry(block).translated(self.editor.contentOffset()).top()  # 获取该行的顶部位置
+        bottom = top + self.editor.blockBoundingGeometry(block).height()  # 获取该行的底部位置
 
-        # 设置布局
-        self.setLayout(layout)
+        while block.isValid():
+            if top > event.rect().bottom():
+                break
+            if bottom >= event.rect().top():
+                lineNumber = str(blockNumber + 1)  # 行号从 1 开始
+                painter.drawText(0, int(top), self.width(), self.fontMetrics().height(), Qt.AlignRight, lineNumber)  # 绘制行号
+            block = block.next()  # 移动到下一个块
+            top = bottom
+            bottom = top + self.editor.blockBoundingGeometry(block).height()
+            blockNumber += 1
+
+
+class CodeEditorWidget(QMainWindow):
+    def __init__(self):
+        super().__init__()
+
+        self.editor = CodeEditor()
+        self.setCentralWidget(self.editor)
+
+        # 为编辑器创建一个行号区域
+        self.lineNumberArea = LineNumberArea(self.editor)
+        self.editor.lineNumberArea = self.lineNumberArea
+
+        # 布局管理
+        layout = QVBoxLayout()
+        layout.addWidget(self.editor)
+        container = QWidget()
+        container.setLayout(layout)
+        self.setCentralWidget(container)
+
+        self.setGeometry(100, 100, 800, 600)
+        self.show()
+
+    def loadCode(self, filename):
+        with open(filename, 'r') as file:
+            content = file.read()
+            self.editor.setPlainText(content)  # 加载代码
+
 
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    dialog = MyDialog()
-    dialog.exec()
+    app = QApplication([])
+
+    window = CodeEditorWidget()
+    window.loadCode('/home/sun/下载/demo_setup_sun/main.asm')  # 替换为实际文件路径
+
+    app.exec_()

@@ -12,21 +12,24 @@ from GUI.ui_MainWindow import *
 #from GUI.ui_BreakPointDialog import *
 from GUI.ui_PortSelect import *
 from GUI.setting import *
+from GUI.ui_memory_widget import *
 from LOGIC.BreakPointDialog import *
 from LOGIC.PortSent import *
 
 import timeit
 from PyQt5.QtSerialPort import QSerialPortInfo, QSerialPort
 
+from LOGIC.memorywindow import Memorywidget
 from LOGIC.settingdialog import SettingDialog
 
 serial_is_open = False
 class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     sign_one = pyqtSignal(str)
     trigger_PortSent = pyqtSignal()
-    ScrollBar_RAM = pyqtSignal(int)
     ProgramCounter = pyqtSignal((str))
     signal_RAM_model = pyqtSignal(str)
+    ScrollBar_RAM = pyqtSignal(int)
+
     global hexfile_dir
 
 ######initialization function##############################################################################################
@@ -36,24 +39,20 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.CreateItems()
         self.CreateSignalSlot()
         self.SetListwidget()
-
     def CreateSignalSlot(self):
         self.actionReset_chip.triggered.connect(self.reset_chip)
         self.actionOpen_Port.triggered.connect(self.PortSent_show)
         self.actionUpdate_Register.triggered.connect(self.get_register)
-        self.actionOpen.triggered.connect(self.PortSelect.send_from_hex_file)
+        self.action_upload_framework.triggered.connect(self.PortSelect.send_from_hex_file)
         self.actionReset.triggered.connect(self.reset_program)
         self.actionLoad.triggered.connect(self.get_lst)
         self.actionList_Port.triggered.connect(self.set_Hightlight)
         self.ProgramCounter.connect(self.set_Hightlight)
-        self.actionIndirect_InRAM.toggled.connect(self.get_ram_model)
-        self.actionDirect_InRAM.toggled.connect(self.get_ram_model)
-        self.actionExternal_RAM.toggled.connect(self.get_ram_model)
-        self.actionCode_Memory.toggled.connect(self.get_ram_model)
         self.actionRefresh_Display.triggered.connect(self.Refresh_Display)
         self.pushButton_lookmem.clicked.connect(self.look_up_memory)
         self.pushButton_setmem.clicked.connect(self.set_memory)
-        #self.signal_RAM_model.connect(lambda Model: self.PortSelect.get_RAM(Model=Model))
+        self.pushButton_setreg.clicked.connect(self.set_reg)
+        self.memory_window.siganl_memory_model.connect(self.PortSelect.set_memory_model)
        # self.actionLoad.triggered.connect(self.upload)
         #self.actionRun.triggered.connect(self.PortSelect.run_code)
         self.actionRun.triggered.connect(lambda: self.PortSelect.run_code(self.setting.run_option()))
@@ -67,12 +66,14 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         #self.actionMake_BreakPoint.triggered.connect(self.BreakPoint.read_BreakPoints)
         self.actionClean_All_Break_Point.triggered.connect(self.clean_all_break_point)
         self.actionSet_dpc.triggered.connect(self.PortSelect.set_dpc)
-        self.comboBox_memorymodel.currentIndexChanged.connect(self.get_RAM)
+        self.memory_window.comboBox_memorymodel.currentIndexChanged.connect(self.get_RAM)
         self.actionSetting.triggered.connect(self.setting_show)
-        self.verticalScrollBar_RAM.valueChanged.connect(self.on_sroll)
+        self.memory_window.verticalScrollBar_MEM.valueChanged.connect(self.on_sroll)
         self.scroll_timer.timeout.connect(self.get_ScrollBar)
-        self.ScrollBar_RAM.connect(self.PortSelect.get_RAM)
-
+        self.ScrollBar_RAM.connect(lambda scrollvalue :self.PortSelect.get_RAM(Scroll_Value=scrollvalue))
+        self.pushButtonr_uart_send.clicked.connect(self.uart_send)
+        self.PortSelect.signal_uart_receive.connect(self.uart_receive_update)
+        self.lineEdit_uart_send.returnPressed.connect(self.pushButtonr_uart_send.click)
         #self.actionClean_All_Break_Point.triggered.connect(self.clean_all_breakpoint_text)
         # Breakpoint model signal connect
         self.PortSelect.text_receive_register.connect(self.set_register)
@@ -86,6 +87,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.PortSelect.signal_get_RAM.connect(self.get_RAM)
         self.PortSelect.signal_csr_info.connect(self.csr_info_update)
         self.PortSelect.signal_get_dpc.connect(self.set_hightlight)
+        self.PortSelect.signal_get_dpc.connect(self.set_label_dpc)
         self.PortSelect.signal_get_IO.connect(self.get_IO)
         self.PortSelect.signal_refresh.connect(self.Refresh_Display)
         self.PortSelect.BP_signal.connect(self.make_breakpoint_text)
@@ -96,14 +98,17 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         #StatusBar model signal connect
         self.PortSelect.signal_status_bar.connect(self.statusBar_show)
-
+        self.setting.checkBox_2.clicked.connect(self.memory_show)
+        self.memory_window.pushButton_size_set.clicked.connect(self.get_RAM)
+        self.memory_window.signal_memory_size.connect(self.PortSelect.set_memory_size)
         # self.setting.signal_update_csr_option.connect(lambda run_option :self.PortSelect.run_step_code(run_option=run_option))
         # self.setting.signal_update_csr_option.connect(lambda run_option :self.PortSelect.run_code(run_option=run_option))
 
     def CreateItems(self):
         self.PortSelect = PortSelectDialog()
         self.BreakPoint = BreakPointDialog()
-        self.setting=SettingDialog()
+        self.setting = SettingDialog()
+        self.memory_window=Memorywidget()
         self.scroll_timer = QTimer(self)
         self.scroll_timer.setSingleShot(True)
 
@@ -124,9 +129,11 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.BreakPoint.show()
         self.statusBar_show('Breakpoint window is open')
         self.PortSelect.exec_()
+    def memory_show(self):
+        self.memory_window.show()
+        self.memory_window.exec_()
     def setting_show(self):
         self.setting.show()
-        self.statusBar_show('Breakpoint window is open')
         self.setting.exec_()
     def statusBar_show(self,message, show_time=None):
         if show_time is None:
@@ -159,6 +166,16 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         address = int(self.lineEdit_setmem_address.text(),16)
         value = int(self.lineEdit_setmem_value.text(),16)
         s = self.PortSelect.urc.setmem(address,value)
+    def set_reg(self):
+        self.PortSelect.urc.haltreq()
+        self.PortSelect.urc.debug_status_reset()
+        address = int(self.lineEdit_setreg_address.text(), 10)
+        value = int(self.lineEdit_setreg_value.text(), 16)
+        if address in range(0,32):
+            s = self.PortSelect.urc.setreg(address, value)
+        else:
+            QMessageBox.warning(self, "Warning", "Address out range.")
+
     def show_context_menu(self, position):
         # 创建上下文菜单
         menu = QMenu()
@@ -349,59 +366,68 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.get_register()
     def on_sroll(self):
         self.scroll_timer.start(300)
-    def get_ScrollBar(self):
-        s = self.verticalScrollBar_RAM.sliderPosition() #获取Scrollbar信息
-        self.ScrollBar_RAM.emit(s)
 
+
+    def set_label_dpc(self,pc):
+        pc_str=pc
+        ProgramCounter = str(hex(int(pc_str, 16))).upper()
+        self.label_pc.setText('PC='+ProgramCounter[2:])
+    def get_ScrollBar(self):
+        s = self.memory_window.verticalScrollBar_MEM.sliderPosition() #获取Scrollbar信息
+        self.ScrollBar_RAM.emit(s)
+    def uart_send(self):
+        messages=self.lineEdit_uart_send.text()
+        self.PortSelect.com_send_data(messages)
+    def uart_receive_update(self,message):
+        self.textBrowser_uart_receive.insertPlainText(message)
+        self.textBrowser_uart_receive.moveCursor(QTextCursor.End)
     def csr_info_update(self, csr_info):
-        self.label_dpc.setText(csr_info)
+        self.label_csr.setText(csr_info)
     def get_gpio(self,message):
         self.label_Port.setText(message)
         return
     def get_ram_model(self):
-        match self.comboBox_memorymodel.currentIndex():
+        match self.memory_window.comboBox_memorymodel.currentIndex():
             case 0:
                 print("Code Memory selected")
-                self.label_RAM_model.setText('Memory model: Display program memory area')
                 #self.signal_RAM_model.emit('IMEM')
-                self.verticalScrollBar_RAM.setMaximum(255)  # 0000-3fff
+                self.memory_window.verticalScrollBar_MEM.setMaximum(255)  # 0000-3fff
                 return 'IMEM'
             case 1:
                 print("Direct InRAM selected")
-                self.label_RAM_model.setText('Memory model: Display internal data memory area')
                 #self.signal_RAM_model.emit('DMEM')
-                self.verticalScrollBar_RAM.setMaximum(127)  # 0000-1fff
+                self.memory_window.verticalScrollBar_MEM.setMaximum(127)  # 0000-1fff
                 return 'DMEM'
         # elif sender == self.actionCode_Memory:
         #     print("Code Memory selected")
         #     self.label_RAM_model.setText('Memory model: Display program memory area')
         #     self.signal_RAM_model.emit('IMEM')
-        #     self.verticalScrollBar_RAM.setMaximum(255)#0000-3fff
+        #     self.verticalScrollBar_MEM.setMaximum(255)#0000-3fff
         #     return 'IMEM'
         # elif sender == self.actionDirect_InRAM:
         #     print("Direct InRAM selected")
         #     self.label_RAM_model.setText('Memory model: Display internal data memory area')
         #     self.signal_RAM_model.emit('DMEM')
-        #     self.verticalScrollBar_RAM.setMaximum(127)#0000-1fff
+        #     self.verticalScrollBar_MEM.setMaximum(127)#0000-1fff
         #     return 'DMEM'
         # elif sender == self.actionIndirect_InRAM:
         #     print("Indirect InRAM selected")
         #     self.label_RAM_model.setText('Memory model: Display indirect data memory area ')
         #     self.signal_RAM_model.emit('DI')
-        #     self.verticalScrollBar_RAM.setMaximum(3)#0000-00ff
+        #     self.verticalScrollBar_MEM.setMaximum(3)#0000-00ff
         #     return 'DI'
         # elif sender == self.actionExternal_RAM:
         #     print("External RAM selected")
         #     self.label_RAM_model.setText('Memory model: Display external data memory area ')
         #     self.signal_RAM_model.emit('DX')
-        #     self.verticalScrollBar_RAM.setMaximum(1023)#0000-ffff
+        #     self.verticalScrollBar_MEM.setMaximum(1023)#0000-ffff
         #     return 'DX'
         #elif sender == self.get_RAM():
 
     def get_RAM(self):
             print("> Starting get RAM... ")
             self.statusBar_show("Getting RAM",1000)
-            Scroll_Value = self.verticalScrollBar_RAM.value()
+            Scroll_Value = self.memory_window.verticalScrollBar_MEM.value()
             #print(Scroll_Value)
             ram_model = self.get_ram_model()
             s = self.PortSelect.get_RAM(Scroll_Value,ram_model)
@@ -418,20 +444,15 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def get_IO(self):
         self.statusBar_show("Getting IO",100)
         print("> Starting get IO... ")
-        if self.PortSelect.com.is_open == True:
-            s = self.PortSelect.get_IO()
-            if s == "":
+        s = self.PortSelect.get_IO()
+        if s == "":
+            QMessageBox.warning(self, "Warning", "Could not get all ports. Please check the connection.")
+            return
+        elif s != "":
+            if len(s) == 0:
                 QMessageBox.warning(self, "Warning", "Could not get all ports. Please check the connection.")
+            else:
                 return
-            elif s != "":
-                # s = "P0=1111111\r\nP1=1111111\r\nP2=1111111\r\nP3=1111111\r\nP4=1111111\r\nP5=1111111\r\n"
-                if len(s) == 0 or s[-1] != "#":
-                    QMessageBox.warning(self, "Warning", "Could not get all ports. Please check the connection.")
-                else:
-                    # self.set_register(self.s)
-                    return
-        else:
-            QMessageBox.warning(self,"Warning","Could not get all ports. Please check the connection.")
 
     def get_register(self):
         self.statusBar_show("Getting register",1000)
@@ -549,9 +570,10 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 hex_values += f"{part4[:2]} {part4[2:4]} {part4[4:6]} {part4[6:8]}"
                 ascii_values = hex_to_ascii(part1 + part2 + part3 + part4)
                 formatted_lines.append(f"{address}: {hex_values[0:11]}|{hex_values[11:22]}|{hex_values[22:33]}|{hex_values[33:]} |{ascii_values}|")
-        print("\n".join(formatted_lines))
+        #print("\n".join(formatted_lines))
         d="\n".join(formatted_lines)
-        self.label_RAM.setText(d)
+        self.memory_window.textBrowser_MEM.insertPlainText(d)
+        self.memory_window.textBrowser_MEM.insertPlainText('\nMemory look up completed\n')
         return s
 
 

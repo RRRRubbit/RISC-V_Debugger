@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'ui_BreakPointDialog.ui'
+# Form implementation generated from reading ui file '/home/sun/PycharmProjects/RISC-V_Debugger/GUI/ui_BreakPointDialog.ui'
 #
 # Created by: PyQt5 UI code generator 5.15.10
 #

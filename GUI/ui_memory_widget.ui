@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>Memory_widget</class>
+ <widget class="QWidget" name="Memory_widget">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>767</width>
+    <height>384</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <layout class="QGridLayout" name="gridLayout_2">
+   <item row="0" column="0">
+    <layout class="QGridLayout" name="gridLayout">
+     <item row="0" column="0" colspan="5">
+      <widget class="QComboBox" name="comboBox_memorymodel">
+       <item>
+        <property name="text">
+         <string>IMEM</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>DMEM</string>
+        </property>
+       </item>
+      </widget>
+     </item>
+     <item row="1" column="4">
+      <widget class="QPushButton" name="pushButton_size_set">
+       <property name="text">
+        <string>OK</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="3">
+      <widget class="QComboBox" name="comboBox_memorysize">
+       <item>
+        <property name="text">
+         <string>64bit</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>256bit</string>
+        </property>
+       </item>
+      </widget>
+     </item>
+     <item row="0" column="5" rowspan="7">
+      <widget class="QScrollBar" name="verticalScrollBar_MEM">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Fixed" vsizetype="Minimum">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="orientation">
+        <enum>Qt::Vertical</enum>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="2">
+      <widget class="QLineEdit" name="lineEdit_memaddr_start">
+       <property name="placeholderText">
+        <string>Start address(hex)</string>
+       </property>
+      </widget>
+     </item>
+     <item row="2" column="0" rowspan="5" colspan="5">
+      <widget class="QTextBrowser" name="textBrowser_MEM">
+       <property name="font">
+        <font>
+         <family>Liberation Mono</family>
+         <weight>75</weight>
+         <bold>true</bold>
+        </font>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

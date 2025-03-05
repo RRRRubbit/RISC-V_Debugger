@@ -36,6 +36,8 @@ class PortSelectDialog(QtWidgets.QDialog, Ui_Dialog_PortSelect):
     signal_com_sending = pyqtSignal(bool)
     signal_label_Port = pyqtSignal(str)
     signal_run_process = pyqtSignal(int)
+    signal_uart_receive = pyqtSignal(str)
+    signal_memory_size = pyqtSignal(int)
     def __init__(self, parent=None):
         super(PortSelectDialog, self).__init__(parent)
         self.receive_thread = None
@@ -45,6 +47,8 @@ class PortSelectDialog(QtWidgets.QDialog, Ui_Dialog_PortSelect):
         self.setupUi(self)
         self.run_porcess_thread=None
         self.signal_com_sending = False
+        self.memory_size = 64
+        self.memory_model = 'IMEM'
         # 设置实例
         self.create_items()
         # 设置信号与槽
@@ -68,7 +72,7 @@ class PortSelectDialog(QtWidgets.QDialog, Ui_Dialog_PortSelect):
         self.timer_urc.timeout.connect(self.urc_connection_detect)  # 计时结束调用operate()方法
         self.timer_urc.start(10000)
         self.timer.start(100)  # 设置计时间隔 100ms 并启动
-        self.receive_thread = ComReceiveThread(self.com, self.textBrowser_Receive, self.com_close_button_clicked, self.checkBox_HexShow, self.signal_status_bar,)
+        self.receive_thread = ComReceiveThread(self.com, self.textBrowser_Receive, self.com_close_button_clicked, self.checkBox_HexShow, self.signal_status_bar,self.signal_uart_receive)
         self.receive_thread.start()
         self.run_porcess_thread=Processbar(self.signal_run_process)
     # 设置信号与槽
@@ -95,7 +99,7 @@ class PortSelectDialog(QtWidgets.QDialog, Ui_Dialog_PortSelect):
         self.label_Time.setText(time.strftime("%B %d, %H:%M:%S", time.localtime()))
 #####Upload function###################################################################################################
     def send_from_hex_file(self):
-        if self.com.is_open == False:
+        if not self.com.is_open:
             QMessageBox.warning(self, "Warning", "Please Open Serial Port")
             return
         else:
@@ -141,30 +145,7 @@ class PortSelectDialog(QtWidgets.QDialog, Ui_Dialog_PortSelect):
         QMessageBox.warning(self, "Canceled", "Upload canceled")
 
 #######NEW CODE###################################################################
-    def set_mem(self,address,value):
-            """弹出输入对话框，限制输入为 0 开头的 16 进制数"""
-            input_dialog = QInputDialog(self)
-            input_dialog.setInputMode(QInputDialog.TextInput)
-            input_dialog.setWindowTitle("set the memory, please input address and value")
-            input_dialog.setLabelText("please input hex nubmer（like 0x1A3F）:")
-            # 创建正则表达式，限制格式为 0x 开头的 16 进制数（可选大小写）
-            hex_regex = QRegularExpression(r"^0[xX][0-9a-fA-F]+$")
-            validator = QRegularExpressionValidator(hex_regex, self)
-            # 获取输入框并设置校验器
-            line_edit = input_dialog.findChild(QLineEdit)
-            line_edit_2 = input_dialog.findChild(QLineEdit)
-            if line_edit and line_edit_2:
-                line_edit.setValidator(validator)
-                line_edit_2.setValidator(validator)
-            # 显示对话框
-            if input_dialog.exec_() == QInputDialog.Accepted:
-                text_1 = input_dialog.textValue()
-                text_2 = input_dialog.textValue()
-                decimal_value_1 = int(text_1, 16)
-                decimal_value_2 = int(text_2, 16)
-                # 将十进制数转换回 16 进制字符串（带 "0x" 前缀）
-                if text_1 and text_2:
-                    self.urc.setmem(decimal_value_1,decimal_value_2)
+
     def set_dpc(self,address):
             """弹出输入对话框，限制输入为 0 开头的 16 进制数"""
             input_dialog = QInputDialog(self)
@@ -309,7 +290,7 @@ class PortSelectDialog(QtWidgets.QDialog, Ui_Dialog_PortSelect):
         dcsr_str=self.urc.dcsr_read()[0][-1]
         if dcsr_str=='40000514':
             self.urc.dcsr_detect(dcsr_str)
-            self.urc.dcsr_set(None)
+            #self.urc.dcsr_set(None)
         elif dcsr_str=='40000490' or dcsr_str=='40000494':
             self.signal_get_dpc.emit(dpc)
             self.urc.dcsr_detect(dcsr_str)
@@ -332,14 +313,21 @@ class PortSelectDialog(QtWidgets.QDialog, Ui_Dialog_PortSelect):
         self.urc.haltresumereq()
         return
 
-    global RAM_model
-    RAM_model = 'IMEM'
-    def get_RAM(self, Scroll_Value=None, Model=None):
-        global RAM_model
-        if Model == None:
-            RAM_model = RAM_model
+    def set_memory_model(self,Memory_model=None):
+        if Memory_model is None:
+            return
         else:
-            RAM_model = Model
+            self.memory_model = Memory_model
+    def set_memory_size(self,Memory_size=None):
+        if Memory_size is None:
+            return
+        else:
+            self.memory_size = Memory_size
+
+    def get_RAM(self, Scroll_Value=None, Model=None,Memory_size=None):
+        if Memory_size is None:
+            Memory_size = self.memory_size
+        RAM_model = self.memory_model
         if self.urc.debug_status_detect == False:
             QMessageBox.warning(self, "Warning", "Please Open Serial Port")
             return
@@ -348,17 +336,17 @@ class PortSelectDialog(QtWidgets.QDialog, Ui_Dialog_PortSelect):
                 self.signal_status_bar.emit("Getting RAM")
                 match RAM_model:
                     case 'IMEM':
-                        s=self.urc.lookmem_range(0x00000000,0x0000003c)
+                        s=self.urc.lookmem_range(0x00000000,0x00000000+Memory_size)
                     case 'DMEM':
-                        s=self.urc.lookmem_range(0x80000000, 0x8000003c)
+                        s=self.urc.lookmem_range(0x80000000, 0x80000000+Memory_size)
             else:
                 match RAM_model:
                     case 'IMEM':
                         start = 0x00000000 + Scroll_Value * 64  # 添加偏移
-                        end = 0x0000003c + Scroll_Value * 64
+                        end = 0x00000000+Memory_size + Scroll_Value * 64
                     case 'DMEM':
                         start = 0x80000000 + Scroll_Value * 64  # 添加偏移
-                        end = 0x8000003c + Scroll_Value * 64
+                        end = 0x80000000+Memory_size + Scroll_Value * 64
                 start_str = hex(start)[2:]  # 去掉0x前缀
                 end_str = hex(end)[2:]
                 start_str = start_str.zfill(4)
@@ -370,54 +358,52 @@ class PortSelectDialog(QtWidgets.QDialog, Ui_Dialog_PortSelect):
                     case 'DMEM':
                         self.urc.debug_status_reset()
                         s = self.urc.lookmem_range(start, end)
-                    case 'DI':
-                        self.com.write(("DI" + " " + start_str + " " + end_str + "\r").encode("utf-8"))
-                    case 'DX':
-                        self.com.write(("DX" + " " + start_str + " " + end_str + "\r").encode("utf-8"))
-                #self.textBrowser_Receive.insertPlainText(s)
-                # print(s)
-                # print(self.text_receive_RAM)
             if len(s) == 0:
                 raise Exception("Could not display program memory area. Please reset and try again.")
             else:
                 self.text_receive_RAM.emit(s)
+            self.memory_size = Memory_size
         return s
-
+    def get_IO(self):
+        self.signal_label_Port.emit('GPIO OUT = ' + self.urc.gpio_read())
+        return self.urc.gpio_read()
 ###################################################################################
     ####从这里开始补充测试
     # 串口发送数据
     def com_send_data(self, message=None):
-        tx_data = self.textEdit_Send.toPlainText()
-        if len(tx_data) == 0 and message is None:
-            return
-        elif len(tx_data) == 0 and message is not None:
-            #message=message+"\r"
-            self.signal_status_bar.emit("Sending Data")
-            self.com.write(message.encode('UTF-8'))
-            return
-        elif self.checkBox_HexSend.isChecked() == False:
-            self.signal_status_bar.emit("Sending Data")
-            self.com.write(tx_data.encode('UTF-8'))
-            self.com.write('\r'.encode('UTF-8'))
-        else:
-            data = tx_data.replace(' ', '')
-            # 如果16进制不是偶数个字符, 去掉最后一个, [ ]左闭右开
-            if len(data) % 2 == 1:
-                data = data[0:len(data) - 1]
-            # 如果遇到非16进制字符
-            if data.isalnum() is False:
-                QMessageBox.critical(self, 'Error', 'Contains non-hexadecimal numbers')
-            try:
-                hexData = binascii.a2b_hex(data)
-            except:
-                QMessageBox.critical(self, 'Error', 'Conversion encoding error')
+        if self.com.is_open:
+            tx_data = self.textEdit_Send.toPlainText()
+            if len(tx_data) == 0 and message is None:
                 return
-            # 发送16进制数据, 发送格式如 ‘31 32 33 41 42 43’, 代表'123ABC'
-            try:
-                self.com.write(hexData)
-            except:
-                QMessageBox.critical(self, 'Abnormal', 'Hexadecimal sending error')
+            elif len(tx_data) == 0 and message is not None:
+                #message=message+"\r"
+                self.signal_status_bar.emit("Sending Data")
+                self.com.write(message.encode('UTF-8'))
+                self.com.write('\r'.encode('UTF-8'))
                 return
+            elif self.checkBox_HexSend.isChecked() == False:
+                self.signal_status_bar.emit("Sending Data")
+                self.com.write(tx_data.encode('UTF-8'))
+                self.com.write('\r'.encode('UTF-8'))
+            else:
+                data = tx_data.replace(' ', '')
+                # 如果16进制不是偶数个字符, 去掉最后一个, [ ]左闭右开
+                if len(data) % 2 == 1:
+                    data = data[0:len(data) - 1]
+                # 如果遇到非16进制字符
+                if data.isalnum() is False:
+                    QMessageBox.critical(self, 'Error', 'Contains non-hexadecimal numbers')
+                try:
+                    hexData = binascii.a2b_hex(data)
+                except:
+                    QMessageBox.critical(self, 'Error', 'Conversion encoding error')
+                    return
+                # 发送16进制数据, 发送格式如 ‘31 32 33 41 42 43’, 代表'123ABC'
+                try:
+                    self.com.write(hexData)
+                except:
+                    QMessageBox.critical(self, 'Abnormal', 'Hexadecimal sending error')
+                    return
 #串口接受
     def com_receive_data(self):
         def display_data(self, rxData):
@@ -437,7 +423,7 @@ class PortSelectDialog(QtWidgets.QDialog, Ui_Dialog_PortSelect):
     def hex_showing_clicked(self):
         if self.checkBox_HexShow.isChecked() == True:
             # 接收区换行
-            self.textEdit_Receive.insertPlainText('\n')
+            self.textBrowser_Receive.insertPlainText('\n')
 
     # 16进制发送按下
     def hex_sending_clicked(self):
@@ -481,7 +467,7 @@ class PortSelectDialog(QtWidgets.QDialog, Ui_Dialog_PortSelect):
         #self.com.setBaudRate(comBaud)
 
     def com_close_button_clicked(self):
-        if self.com.is_open == True:
+        if self.com.is_open:
             # 先暂停串口读取
             #self.com.blockSignals(True)
             # 关闭串口
@@ -564,16 +550,18 @@ class UploadThread(QThread):
 
 #####Class Receive Thread##############################################################################################
 class ComReceiveThread(QThread):
-    def __init__(self, com, textEdit_Receive, Com_Close_Button_clicked, checkBox_HexShow, signal_status_bar):
+    def __init__(self, com, textEdit_Receive, Com_Close_Button_clicked, checkBox_HexShow, signal_status_bar,signal_uart_receive):
         super().__init__()
         self.com = com
         self.textBrowser_Receive = textEdit_Receive
         self.Com_Close_Button_clicked = Com_Close_Button_clicked
         self.checkBox_HexShow = checkBox_HexShow
         self.signal_status_bar = signal_status_bar
+        self.signal_uart_receive=signal_uart_receive
     def receive_zone_update(self, message):
         self.textBrowser_Receive.insertPlainText(message)
         self.signal_status_bar.emit(message)
+
 
     def run(self):
         if self.com.is_open == True:
@@ -583,20 +571,17 @@ class ComReceiveThread(QThread):
                 # QMessageBox.critical(self, 'Fatal error', 'The serial port received wrond data. Please check the serial port connect.')
                 # QMessageBox.warning(self, 'Fatal error', 'The serial port received wrond data. Please check the serial port connect.')
                 self.Com_Close_Button_clicked()
-            if self.checkBox_HexShow.isChecked() == False:
-                try:
-                    self.textBrowser_Receive.insertPlainText(rxData.decode('UTF-8'))
-                    self.textBrowser_Receive.moveCursor(QTextCursor.End)
-                    if rxData != b'':
-                        self.signal_status_bar.emit("Receiving Data")
-                except:
-                    pass
+            if self.checkBox_HexShow.isChecked() == False and rxData != b'':
+                self.signal_uart_receive.emit(rxData.decode('UTF-8'))
+                self.textBrowser_Receive.insertPlainText(rxData.decode('UTF-8'))
+                self.textBrowser_Receive.moveCursor(QTextCursor.End)
             elif self.checkBox_HexShow.isChecked() == True and rxData != b'':
                 Data = binascii.b2a_hex(rxData).decode('ascii')
                 # re 正则表达式 (.{2}) 匹配两个字母
                 hexStr = ' 0x'.join(re.findall('(.{2})', Data))
                 # 补齐第一个 0x
                 hexStr = '0x' + hexStr
+                self.signal_uart_receive.emit(hexStr+' ')
                 self.textBrowser_Receive.insertPlainText(hexStr)
                 self.textBrowser_Receive.insertPlainText(' ')
                 self.textBrowser_Receive.moveCursor(QTextCursor.End)

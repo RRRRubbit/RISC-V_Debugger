@@ -116,15 +116,80 @@ class UrjtagTermin():
             self.urc.shift_dr()
             self.urc.shift_dr()
             hex_value_value ='0x'+ self.dmi_instruction_decode(self.urc.get_dr_out_string())
-            reg_str+=hex_value_value+' '
-        return_value_down = reg_str
-        return_value_up = "X00(zero)  X01(ra)    X02(sp)    X03(gp)    X04(tp)    X05(t0)    X06(t1)    X07(t2)    " \
-                          "X08(s0/fp) X09(s1)    X10(a0)    X11(a1)    X12(a2)    X13(a3)    X14(a4)    X15(a5)    " \
-                          "X16(a6)    X17(a7)    X18(s2)    X19(s3)    X20(s4)    X21(s5)    X22(s6)    X23(s7)    " \
-                          "X24(s8)    X25(s9)    X26(s10)   X27(s11)   X28(t3)    X29(t4)    X30(t5)    X31(t6)"
-        return_value = return_value_up[0:176]+"\n"+return_value_down[0:176]+"\n"+return_value_up[176:]+"\n"+return_value_down[176:]
-        print(return_value)
-        return return_value
+            reg_str+='= '+hex_value_value+'\n'
+        # return_value_down = reg_str
+        # return_value_up = "X00(zero)  X01(ra)    X02(sp)    X03(gp)    X04(tp)    X05(t0)    X06(t1)    X07(t2)    " \
+        #                   "X08(s0/fp) X09(s1)    X10(a0)    X11(a1)    X12(a2)    X13(a3)    X14(a4)    X15(a5)    " \
+        #                   "X16(a6)    X17(a7)    X18(s2)    X19(s3)    X20(s4)    X21(s5)    X22(s6)    X23(s7)    " \
+        #                   "X24(s8)    X25(s9)    X26(s10)   X27(s11)   X28(t3)    X29(t4)    X30(t5)    X31(t6)"
+        # return_value = return_value_up[0:176]+"\n"+return_value_down[0:176]+"\n"+return_value_up[176:]+"\n"+return_value_down[176:]
+        # print(return_value)
+        reg_index = "X00(zero)  \nX01(ra)    \nX02(sp)    \nX03(gp)    \nX04(tp)    \nX05(t0)    \nX06(t1)    \nX07(t2)    " \
+                    "\nX08(s0/fp) \nX09(s1)    \nX10(a0)    \nX11(a1)    \nX12(a2)    \nX13(a3)    \nX14(a4)    \nX15(a5)    " \
+                    "\nX16(a6)    \nX17(a7)    \nX18(s2)    \nX19(s3)    \nX20(s4)    \nX21(s5)    \nX22(s6)    \nX23(s7)    " \
+                    "\nX24(s8)    \nX25(s9)    \nX26(s10)   \nX27(s11)   \nX28(t3)    \nX29(t4)    \nX30(t5)    \nX31(t6)    \n"
+
+        reg_value = " = 0x00000000  \n = 0x00000000  \n = 0x00000000  \n = 0x00000000  \n = 0x00000000  \n" \
+                    "= 0x00000000  \n = 0x00000000  \n = 0x00000000  \n = 0x00000000  \n = 0x00000000  \n" \
+                    "= 0x00000000  \n = 0x00000000  \n = 0x00000000  \n = 0x00000000  \n = 0x00000000  \n" \
+                    "= 0x00000000  \n = 0x00000000  \n = 0x00000000  \n = 0x00000000  \n = 0x00000000  \n" \
+                    "= 0x00000000  \n = 0x00000000  \n = 0x00000000  \n = 0x00000000  \n = 0x00000000  \n" \
+                    "= 0x00000000  \n = 0x00000000  \n = 0x00000000  \n = 0x00000000  \n"
+        reg_value = reg_str
+        # Combine the two parts to create the final formatted result
+        final_output = '\n'.join([f"{i}{j}" for i, j in zip(reg_index.split('\n'), reg_value.split('\n'))])
+
+        print(final_output)
+        return final_output
+    def setreg(self,reg_index=int,reg_value=0):
+        CMD_CPDATA02REG_C = [
+            0x5C008C4002,
+            0x5c008C4006,
+            0x5c008C400a,
+            0x5c008C400e,
+            0x5c008C4012,
+            0x5c008C4016,
+            0x5c008C401a,
+            0x5c008C401e,
+            0x5c008C4022,
+            0x5c008C4026,
+            0x5c008C402a,
+            0x5c008C402e,
+            0x5c008C4032,
+            0x5c008C4036,
+            0x5c008C403a,
+            0x5c008C403e,
+            0x5c008C4042,
+            0x5c008C4046,
+            0x5c008C404a,
+            0x5c008C404e,
+            0x5c008C4052,
+            0x5c008C4056,
+            0x5c008C405a,
+            0x5c008C405e,
+            0x5c008C4062,
+            0x5c008C4066,
+            0x5c008C406a,
+            0x5c008C406e,
+            0x5c008C4072,
+            0x5c008C4076,
+            0x5c008C407a,
+            0x5c008C407e
+        ]
+        CMD_SETDATA0_C = self.dmi_instruction_generate(0x2,reg_value,0x04)
+        reg_str = ''
+        self.urc.set_instruction("DMI")
+        self.urc.shift_ir()
+        self.urc.set_dr_in(CMD_SETDATA0_C)
+        self.urc.shift_dr()
+        self.urc.shift_dr()
+        self.urc.set_dr_in(CMD_CPDATA02REG_C[reg_index])
+        self.urc.shift_dr()
+        self.urc.shift_dr()
+        hex_value_value = '0x' + self.dmi_instruction_decode(self.urc.get_dr_out_string())
+        reg_str += '= ' + hex_value_value + '\n'
+        print(hex_value_value)
+        return
     def lookmem(self,memory_addr):
         self.haltreq()
         hex_num = hex(memory_addr)[2:].zfill(8)
@@ -224,7 +289,7 @@ class UrjtagTermin():
             decoded_value = self.dmi_instruction_decode(tdata)
             #print(f"{name_asm} = {decoded_value}")
             #print(f"{name_asm:<13} = {decoded_value:>9} - {desc}")
-            messages += f"\n{name_asm:<13} = {decoded_value:>9}"
+            messages += f"{name_asm:<13} = {decoded_value:>9}\n"
             commands.append((addr, name_asm, desc, cmd, decoded_value))
             # if addr == 0x7bc:
             #     self.mcause_read()
@@ -289,7 +354,7 @@ class UrjtagTermin():
                 self.urc.shift_dr()
             tdata = self.urc.get_dr_out_string()
             decoded_value = self.dmi_instruction_decode(tdata)
-            messages += f"\n{name_asm:<13} = {decoded_value:>9}"
+            messages += f"{name_asm:<13} = {decoded_value:>9}\n"
             commands.append((addr, name_asm, desc, cmd, decoded_value))
         commands.append(messages)
         return commands
@@ -317,7 +382,7 @@ class UrjtagTermin():
                 self.urc.shift_dr()
             tdata = self.urc.get_dr_out_string()
             decoded_value = self.dmi_instruction_decode(tdata)
-            messages += f"\n{name_asm:<13} = {decoded_value:>9}"
+            messages += f"{name_asm:<13} = {decoded_value:>9}\n"
             commands.append((addr, name_asm, desc, cmd, decoded_value))
         commands.append(messages)
         return commands
@@ -648,7 +713,7 @@ class UrjtagTermin():
             tdata = self.urc.get_dr_out_string()
             decoded_value = self.dmi_instruction_decode(tdata)
             #print(f"{name_asm:<13} = {decoded_value:>9} - {desc}")
-            messages += f"\n{name_asm:<13} = {decoded_value:>9}"
+            messages += f"{name_asm:<13} = {decoded_value:>9}\n"
             if addr == 0x342:
                 self.mcause_read()
         commands.append(messages)
@@ -695,7 +760,7 @@ class UrjtagTermin():
                 decoded_value = self.dmi_instruction_decode(tdata)
                 #print(f"{name_asm} = {decoded_value} - {desc}")
                 #print(f"{name_asm:<13} = {decoded_value:>9} - {desc}")
-                messages += f"\n{name_asm:<13} = {decoded_value:>9}"
+                messages += f"{name_asm:<13} = {decoded_value:>9}\n"
         commands.append(messages)
         return commands
     def machine_info_csr_read(self):
@@ -733,7 +798,7 @@ class UrjtagTermin():
                 tdata = self.urc.get_dr_out_string()
                 decoded_value = self.dmi_instruction_decode(tdata)
                 #print(f"{name} = {decoded_value}")
-                messages += f"\n{name_asm:<13} = {decoded_value:>9}"
+                messages += f"{name_asm:<13} = {decoded_value:>9}\n"
         commands.append(messages)
         return commands
     def dpc_set(self,address=None):
@@ -763,6 +828,7 @@ class UrjtagTermin():
         print(f"dpc is set to {hex(address)}")
         self.dpc_read()
     def gpio_read(self):
+        self.haltreq()
         gpio_2 = self.dmi_instruction_generate(0x2, 0x00FAF03, 0x20)
         dpc_step_set=self.dmi_instruction_generate(0x2,0xfffffc08,0x04)
         CMD_L=[
@@ -849,9 +915,8 @@ if __name__ == "__main__":
     #Urjtag_T.haltresumereq()
     #Urjtag_T.lookmem_range(0x00000000,0x00000040)
     Urjtag_T.haltreq()
-
-    a=Urjtag_T.trigger_tdata1_detect()
-    print(a[0][-1])
+    Urjtag_T.setreg(24,0xffff)
+    Urjtag_T.lookreg()
     #Urjtag_T.gpio_read()
     #Urjtag_T.dcsr_detect()
     Urjtag_T.haltresumereq()
