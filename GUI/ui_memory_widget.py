@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file '/home/sun/PycharmProjects/RISC-V_Debugger/GUI/ui_memory_widget.ui'
+# Form implementation generated from reading ui file 'ui_memory_widget.ui'
 #
 # Created by: PyQt5 UI code generator 5.15.10
 #
@@ -63,6 +63,16 @@ class Ui_Memory_widget(object):
         self.comboBox_memorymodel.setItemText(0, _translate("Memory_widget", "IMEM"))
         self.comboBox_memorymodel.setItemText(1, _translate("Memory_widget", "DMEM"))
         self.pushButton_size_set.setText(_translate("Memory_widget", "OK"))
-        self.comboBox_memorysize.setItemText(0, _translate("Memory_widget", "64bit"))
-        self.comboBox_memorysize.setItemText(1, _translate("Memory_widget", "256bit"))
+        self.comboBox_memorysize.setItemText(0, _translate("Memory_widget", "64byte"))
+        self.comboBox_memorysize.setItemText(1, _translate("Memory_widget", "256byte"))
         self.lineEdit_memaddr_start.setPlaceholderText(_translate("Memory_widget", "Start address(hex)"))
+
+
+if __name__ == "__main__":
+    import sys
+    app = QtWidgets.QApplication(sys.argv)
+    Memory_widget = QtWidgets.QWidget()
+    ui = Ui_Memory_widget()
+    ui.setupUi(Memory_widget)
+    Memory_widget.show()
+    sys.exit(app.exec_())

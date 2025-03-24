@@ -296,12 +296,13 @@ class UrjtagTermin():
             # elif addr == 0x7b0:
             #     messages += f" {self.dcsr_detect(tdata)}"
         commands.append(messages)
+        print(commands)
         return commands
     def trigger_set(self, address, name=''):
-        tselect = self.dmi_instruction_generate(0x2, 0x7A029073, 0x20)
-        tdata1 = self.dmi_instruction_generate(0x2, 0x7A129073, 0x20)
-        tdata2 = self.dmi_instruction_generate(0x2, 0x7A229073, 0x20)
-        tinfo = self.dmi_instruction_generate(0x2, 0x7A029073, 0x20)
+        tselect = self.dmi_instruction_generate(0x2, 0x7A0e9073, 0x20)
+        tdata1 = self.dmi_instruction_generate(0x2, 0x7A1e9073, 0x20)
+        tdata2 = self.dmi_instruction_generate(0x2, 0x7A2e9073, 0x20)
+        tinfo = self.dmi_instruction_generate(0x2, 0x7A0e9073, 0x20)
         tdata1_set = self.dmi_instruction_generate(0x2, address, 0x04)
         tdata2_set = self.dmi_instruction_generate(0x2, address, 0x04)
         cmds_data0 = [tdata1,tdata2]
@@ -310,14 +311,14 @@ class UrjtagTermin():
         for cmd_data0 ,cmd_name  in zip(cmds_data0,names):
             match name:
                 case cmd_name:
-                    dmi_instruction = dmi_instructions[names.index(cmd_name)]
+                    trigger_value_dmi_instruction = dmi_instructions[names.index(cmd_name)]
                     cmd = cmds_data0[names.index(cmd_name)]
         CMD_TDATASET = [
-            cmd,  # csrw tdatareg, x5  write x5 to tdatareg progbuff0 7A0E9073 t4
+            cmd,  # csrw tdatareg, t4  write t4 to tdatareg progbuff0  t4
             0x84004001CE,  # ebreak    progbuff1
-            dmi_instruction,  # write new dpc in data 0
-            # memory_addr_int,
-            0x5C009C4016,  # copy dato 0 to x5 then exe progbuff0 and progbuff1
+            trigger_value_dmi_instruction,  # write new trigger in data 0
+            # memory_addr_int,a
+            0x5C009C4076,  # copy dato 0 to t4 then exe progbuff0 and progbuff1
         ]
         self.urc.set_instruction("DMI")
         self.urc.shift_ir()
@@ -326,8 +327,8 @@ class UrjtagTermin():
             self.urc.shift_dr()
             self.urc.shift_dr()
         tdata = self.urc.get_dr_out_string()
-        decoded_value = self.dmi_instruction_decode(tdata)
-        print(f"{name} is set to {hex(address)}")
+        decode_str = self.dmi_instruction_decode(tdata)
+        print(f"{name} is set to {decode_str}")
         return
     def trigger_tdata1_detect(self):
         csrs=[(0x7a1, "tdata1", "CSR_TDATA1", "Trigger Data Register 1"),]
@@ -338,7 +339,7 @@ class UrjtagTermin():
             instruction = (addr << 20) | 0x2FF3  # 生成 CSR 读取指令
             cmd = self.dmi_instruction_generate(0x2, instruction, 0x20)
             CMD_MCSRREAD = [
-                cmd,  # csrr x5, tdatareg read tdatareg to x5 progbuff0
+                cmd,  # csrr t5, tdatareg read tdatareg to t5 progbuff0
                 0x84004001CE,  # ebreak    progbuff1
                 # 0x84000001CE,  # progbuff1 NOP
                 0x5C009C407E,  # copy dato 0 to t5 then exe progbuff0 and progbuff1
@@ -366,7 +367,7 @@ class UrjtagTermin():
             instruction = (addr << 20) | 0x2FF3  # 生成 CSR 读取指令
             cmd = self.dmi_instruction_generate(0x2, instruction, 0x20)
             CMD_MCSRREAD = [
-                cmd,  # csrr x5, tdatareg read tdatareg to x5 progbuff0
+                cmd,  # csrr t5, tdatareg read tdatareg to t5 progbuff0
                 0x84004001CE,  # ebreak    progbuff1
                 # 0x84000001CE,  # progbuff1 NOP
                 0x5C009C407E,  # copy dato 0 to t5 then exe progbuff0 and progbuff1
@@ -455,7 +456,7 @@ class UrjtagTermin():
     def mstatus_read(self):
         mstatus_read_cmd = self.dmi_instruction_generate(0x2, 0x30002EF3, 0x20)
         CMD_DCSRREAD = [
-            mstatus_read_cmd,  # csrr t4, mstatus read mstatus to x5
+            mstatus_read_cmd,  # csrr t4, mstatus read mstatus to t5
             0x84004001CE,  # ebreak    progbuff1
             # 0x84000001CE,  #progbuff1 NOP
             0x5C009C4076,  # copy dato 0 to t4 then exe progbuff0 and progbuff1
@@ -494,24 +495,26 @@ class UrjtagTermin():
         return dmi_str
     def dcsr_set(self,CMD=None):
         if CMD is None:
-            dcsr_data0=0x1100001342 #setp bit =0
+            dcsr_value=0x400004D0
+            dcsr_data0=self.dmi_instruction_generate(0x2, dcsr_value, 0x04)
+            #dcsr_data0=0x1100001342 #setp bit =0
             action_str = 'Clean step run status'
         elif CMD == 'STEP':
-            dcsr_data0=0x1100001352
+            dcsr_value=0x40000514
+            dcsr_data0=self.dmi_instruction_generate(0x2, dcsr_value, 0x04)
+            #dcsr_data0=0x1100001352
             action_str = 'Set step run status'
         else:
+            dcsr_value = 0x400004D0
             dcsr_data0=self.dmi_instruction_generate(0x2,CMD,0x04)
-        #dcsr_set_cmd=self.dmi_instruction_generate(0x2,0x7B002EF3,0x20)
-        dcsr_set_cmd = self.dmi_instruction_generate(0x2, 0x7B0E9073, 0x20) #csrw dcsr, t6
+            action_str = 'Nothing done'
+        dcsr_set_cmd = self.dmi_instruction_generate(0x2, 0x7B0E9073, 0x20) #csrw dcsr, t4
         CMD_STEPSET = [
             dcsr_set_cmd,
-            #0x81EC0A41CE,  # csrw dcsr, x5  write x5 to dcsr
             0x84004001CE,  # ebreak    progbuff1
             dcsr_data0,  # write new dcsr(step=1) in data 0
             # memory_addr_int,
             0x5C009C4076,  # copy dato 0 to t4 then exe progbuff0 and progbuff1
-            0x5C00884076,  # copy t4 to data0, transfer=1
-            0x1000000001,  # read dato0
         ]
         self.urc.set_instruction("DMI")
         self.urc.shift_ir()
@@ -520,12 +523,12 @@ class UrjtagTermin():
             self.urc.shift_dr()
             self.urc.shift_dr()
         dmi_str = self.dmi_instruction_decode(self.urc.get_dr_out_string())
-        print(f"dscr is set to",dmi_str,'-',action_str)
+        print(f"dscr is set to",str(hex(dcsr_value)),'-',action_str)
         return dmi_str
     def dpc_read(self):
         dpc_read_cmd = self.dmi_instruction_generate(0x2, 0x7B102E73, 0x20)
         CMD_DPCREAD=[
-            dpc_read_cmd, #csrw x28(t3), dpc read dpc to x28
+            dpc_read_cmd, #csrr x28(t3), dpc read dpc to x28
             0x84004001CE,  # ebreak    progbuff1
             0x5C009C4072,  # copy dato 0 to t3 then exe progbuff0 and progbuff1
             0x5C00884072,  # copy t3 to data0
@@ -543,7 +546,7 @@ class UrjtagTermin():
     def mepc_read(self):
         mepc_read_cmd=self.dmi_instruction_generate(0x2, 0x34102E73, 0x20)
         CMD_MEPCREAD=[
-            mepc_read_cmd,  #csrw t3, mepc read mepc to x3
+            mepc_read_cmd,  #csrr t3, mepc read mepc to x3
             #0x800010900E,  # lw s0 0(s0)
             0x84004001CE,  # ebreak    progbuff1
             #memory_addr_int,  # write address in data 0
@@ -564,7 +567,7 @@ class UrjtagTermin():
     def mcause_read(self):
         mcause_read_cmd=self.dmi_instruction_generate(0x2,0x34202E73,0x20)
         CMD_MCAUSEREAD=[
-            mcause_read_cmd,    #csrw t3, mcause read mepc to t3
+            mcause_read_cmd,    #csrr t3, mcause read mepc to t3
             0x84004001CE,  # ebreak    progbuff1
             #memory_addr_int,  # write address in data 0
             0x5C009C4072,  # copy dato 0 to t3 then exe progbuff0 and progbuff1
@@ -800,6 +803,45 @@ class UrjtagTermin():
                 messages += f"{name_asm:<13} = {decoded_value:>9}\n"
         commands.append(messages)
         return commands
+    def csr_set(self,value=None,addr=None):
+        csr_addr = (addr << 20) | 0xe9073
+        csr_set_cmd = self.dmi_instruction_generate(0x2, csr_addr, 0x20)
+        csr_data0 = self.dmi_instruction_generate(0x2, value, 0x04)  # 使用整数地址生成指令
+        CMD_CSRSET = [
+            csr_set_cmd,  # csrw dpc, t4  write t4 to dpc
+            0x84004001CE,  # ebreak    progbuff1
+            csr_data0,  # write new value in data 0
+            0x5C009C4076,  # copy dato 0 to t4 then exe progbuff0 and progbuff1
+        ]
+        self.urc.set_instruction("DMI")
+        self.urc.shift_ir()
+        for CMD in CMD_CSRSET:
+            self.urc.set_dr_in(CMD)
+            self.urc.shift_dr()
+            self.urc.shift_dr()
+        decoded_value = self.dmi_instruction_decode(self.urc.get_dr_out_string())
+        print({str(hex(addr))}, "is set to", str(hex(value)),"read back is ",decoded_value)
+        return decoded_value
+    def csr_read(self,addr):
+        instruction = (addr << 20) | 0x2FF3  # 生成 CSR 读取指令
+        cmd = self.dmi_instruction_generate(0x2, instruction, 0x20)
+        CMD_MCSRREAD = [
+            cmd,  # csrr t5, tdatareg read tdatareg to t5 progbuff0
+            0x84004001CE,  # ebreak    progbuff1
+            0x5C009C407E,  # copy dato 0 to t5 then exe progbuff0 and progbuff1
+            0x5C0088407E,  # copy t5 to data0, transfer=1
+            0x1000000001,  # read dato0
+        ]
+        self.urc.set_instruction("DMI")
+        self.urc.shift_ir()
+        for CMD in CMD_MCSRREAD:
+            self.urc.set_dr_in(CMD)
+            self.urc.shift_dr()
+            self.urc.shift_dr()
+        tdata = self.urc.get_dr_out_string()
+        decoded_value = self.dmi_instruction_decode(tdata)
+        print({str(hex(addr))},"value is",decoded_value)
+        return decoded_value
     def dpc_set(self,address=None):
         if address is None:
             dpc_step_set=0x1000000002
@@ -810,22 +852,25 @@ class UrjtagTermin():
             dpc_step_set = self.dmi_instruction_generate(0x2, address, 0x04)  # 使用整数地址生成指令
         else:
             raise ValueError("Invalid address type")  # 处理其他无效的地址类型
+        dpc_set = self.dmi_instruction_generate(0x2, 0x7b1e9073, 0x20)
         CMD_DPCSET=[
-            0x81EC4A41CE,  #csrw dpc, x5  write x5 to dpc
+            dpc_set,  #csrw dpc, t4  write t4 to dpc
             0x84004001CE,  # ebreak    progbuff1
             dpc_step_set, # write new dpc in data 0
-            0x5C009C4016,  # copy dato 0 to x5 then exe progbuff0 and progbuff1
-            ]
+            0x5c009c407a,  # copy dato 0 to t4 then exe progbuff0 and progbuff1
+            0x5C00884076,  # copy t4 to data0, transfer=1
+            0x1000000001,  # read dato0
+        ]
         self.urc.set_instruction("DMI")
         self.urc.shift_ir()
         for CMD in CMD_DPCSET:
             self.urc.set_dr_in(CMD)
             self.urc.shift_dr()
             self.urc.shift_dr()
-        self.urc.get_dr_out_string()
-        address=self.dmi_instruction_decode(dpc_step_set)
-        print(f"dpc is set to {hex(address)}")
+        dmi_str = self.dmi_instruction_decode(self.urc.get_dr_out_string())
+        print(f"dpc is set to", dmi_str)
         self.dpc_read()
+        return dmi_str
     def gpio_read_new(self):
         gpio_in_1=self.lookmem(0xfffffc00)
         gpio_in_2 = self.lookmem(0xfffffc04)
@@ -913,15 +958,16 @@ if __name__ == "__main__":
     Urjtag_T=UrjtagTermin()
     #Urjtag_T.reset()
     #Urjtag_T.haltreq()
-    Urjtag_T.debug_status_reset()
+    #Urjtag_T.debug_status_reset()
     #Urjtag_T.debug_status_reset()
     #Urjtag_T.lookreg()
     #Urjtag_T.connection_detect()
     #Urjtag_T.haltresumereq()
     #Urjtag_T.lookmem_range(0x00000000,0x00000040)
     Urjtag_T.haltreq()
-    Urjtag_T.setreg(24,0xffff)
-    Urjtag_T.lookreg()
-    Urjtag_T.gpio_read_new()
-    #Urjtag_T.dcsr_detect()
+    #Urjtag_T.dcsr_set()
+    #Urjtag_T.trigger_model_csr_read()
+    Urjtag_T.csr_set(0xbcdf,0x7a2)
+    Urjtag_T.csr_read(0x7a1)
+    Urjtag_T.csr_read(0x7a2)
     Urjtag_T.haltresumereq()

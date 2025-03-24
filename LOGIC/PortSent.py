@@ -36,6 +36,7 @@ class PortSelectDialog(QtWidgets.QDialog, Ui_Dialog_PortSelect):
     signal_com_sending = pyqtSignal(bool)
     signal_label_Port = pyqtSignal(str)
     signal_run_process = pyqtSignal(int)
+    signal_breakpoint_address = pyqtSignal(int)
     signal_uart_receive = pyqtSignal(str)
     signal_memory_size = pyqtSignal(int)
     def __init__(self, parent=None):
@@ -257,7 +258,7 @@ class PortSelectDialog(QtWidgets.QDialog, Ui_Dialog_PortSelect):
                 )
                 if reply == QMessageBox.Yes:
                     self.urc.trigger_set(0x60000040, 'tdata1')
-                    self.signal_breakpoint_address.emit()
+                    self.signal_breakpoint_address.emit(int(dpc,16))
                     print('trigger data1 is clean to 0x60000040\n')
                     QMessageBox.information(self, "clean successful", "breakpoint clean successful！")
         self.signal_get_dpc.emit(dpc)

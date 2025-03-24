@@ -35,6 +35,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 ######initialization function##############################################################################################
     def __init__(self, parent=None):
         super(MainWindow, self).__init__(parent)
+        self.option_address_value = None
         self.setupUi(self)
         self.CreateItems()
         self.CreateSignalSlot()
@@ -80,7 +81,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.PortSelect.text_receive_RAM.connect(self.set_RAM)
         self.PortSelect.signal_label_Port.connect(self.set_gpio)
         self.PortSelect.text_receive_IO.connect(self.set_IO)
-
+        self.PortSelect.signal_breakpoint_address.connect(self.option_address)
         #self.PortSelect.text_receive_Breakpoint.connect(self.BreakPoint.set_BreakPoints_text)
         self.PortSelect.run_porcess_thread.signal_run_process.connect(self.set_processbar)
         self.PortSelect.signal_get_register.connect(self.get_register)
@@ -251,9 +252,12 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                             self.breakpoints += [BP_signal]
                     print(f'Breakpoint list is {self.breakpoints}.')
 
-
-
-
+    def option_address(self,address):
+            if address is None:
+                return
+            else:
+                self.option_address_value = address
+                self.remove_breakpoint()
     def add_breakpoint(self, item):
         item_text = item.text()
         address_part = item_text.split(":")[0].strip()
@@ -279,30 +283,56 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             return
         else:
             return
-    def remove_breakpoint(self, item):
-        item_text = item.text()
-        address_part = item_text.split(":")[0].strip()
-        breakpoint_address_int = int(address_part,16)
-        breakpoint_address_hex = hex(breakpoint_address_int)
-        if breakpoint_address_hex in self.breakpoints:
-            breakpoint_index=self.breakpoints.index(breakpoint_address_hex)
-            self.breakpoints[breakpoint_index]="Deleted"
-            print(self.breakpoints[breakpoint_index])
-            s = self.PortSelect.remove_breakpoint(breakpoint_address_int)
-            print(f'Removed breakpoint at: {item_text}')
-            self.statusBar_show(f'Removed breakpoint at: {item_text}')
-            if s is None:
-                if ' [Breakpoint] [Enable]' in item_text:
-                    item.setText(item_text.replace(' [Breakpoint] [Enable]', ''))
-                    # self.breakpoints.remove(item_text.replace(' [Breakpoint]', ''))
-                elif ' [Breakpoint] [Disable]' in item_text:
-                    item.setText(item_text.replace(' [Breakpoint] [Disable]', ''))
-                else:
-                    QMessageBox.warning(self, "Warning", "There is no Breakpoint.")
-                print(f'Breakpoint list is {self.breakpoints}.')
+    def remove_breakpoint(self, item=None):
+        if self.option_address_value is not None and item is None:
+            option_address_value_hex_str = str(hex(self.option_address_value)[2:]).lstrip("0")
+            if option_address_value_hex_str in self.breakpoints:
+                breakpoint_index = self.breakpoints.index(self.option_address_value)
+                self.breakpoints[breakpoint_index] = "Deleted"
+                print(self.breakpoints[breakpoint_index])
+                print(f'Removed breakpoint at: addr {self.option_address_value}')
+                listWidget_ASM = self.listWidget_ASM
+                count = listWidget_ASM.count()
+                line_item = []
+                for i in range(count):
+                    line_item.append(listWidget_ASM.item(i).text())
+                    if self.option_address_value in line_item[i]:
+                        if ' [Breakpoint] [Enable]' in line_item[i]:
+                            new_line = str(line_item[i])
+
+                            new_line = new_line.replace(' [Breakpoint] [Enable]', '')
+                            listWidget_ASM.item(i).setText(new_line)
+
+                        elif ' [Breakpoint] [Disable]' in line_item[i]:
+                            new_line = str(line_item[i])
+                            new_line = new_line.replace(' [Breakpoint] [Disable]', '')
+                            listWidget_ASM.item(i).setText(new_line)
+                        else:
+                            continue
         else:
-            s = self.PortSelect.remove_breakpoint(breakpoint_address_int)
-            return s
+            item_text = item.text()
+            address_part = item_text.split(":")[0].strip()
+            breakpoint_address_int = int(address_part,16)
+            breakpoint_address_hex = hex(breakpoint_address_int)
+            if breakpoint_address_hex in self.breakpoints:
+                breakpoint_index=self.breakpoints.index(breakpoint_address_hex)
+                self.breakpoints[breakpoint_index]="Deleted"
+                print(self.breakpoints[breakpoint_index])
+                s = self.PortSelect.remove_breakpoint(breakpoint_address_int)
+                print(f'Removed breakpoint at: {item_text}')
+                self.statusBar_show(f'Removed breakpoint at: {item_text}')
+                if s is None:
+                    if ' [Breakpoint] [Enable]' in item_text:
+                        item.setText(item_text.replace(' [Breakpoint] [Enable]', ''))
+                        # self.breakpoints.remove(item_text.replace(' [Breakpoint]', ''))
+                    elif ' [Breakpoint] [Disable]' in item_text:
+                        item.setText(item_text.replace(' [Breakpoint] [Disable]', ''))
+                    else:
+                        QMessageBox.warning(self, "Warning", "There is no Breakpoint.")
+                    print(f'Breakpoint list is {self.breakpoints}.')
+            else:
+                s = self.PortSelect.remove_breakpoint(breakpoint_address_int)
+                return s
 
 
     def enable_breakpoint(self, item):
