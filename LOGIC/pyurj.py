@@ -304,15 +304,14 @@ class UrjtagTermin():
         tinfo = self.dmi_instruction_generate(0x2, 0x7A029073, 0x20)
         tdata1_set = self.dmi_instruction_generate(0x2, address, 0x04)
         tdata2_set = self.dmi_instruction_generate(0x2, address, 0x04)
-        cmds = [tdata1,tdata2]
-        names = ["tdata1","tdata2"]  # 给每个元素一个名称
-        dmi_instructions=[tdata1_set,tdata2_set]
-        if name==names[0]:
-            dmi_instruction = dmi_instructions[0]
-            cmd=cmds[0]
-        elif name==names[1]:
-            dmi_instruction = dmi_instructions[1]
-            cmd=cmds[1]
+        cmds_data0 = [tdata1,tdata2]
+        names = ["tdata1","tdata2"]
+        dmi_instructions=[tdata1_set,tdata2_set]# 给每个元素一个名称
+        for cmd_data0 ,cmd_name  in zip(cmds_data0,names):
+            match name:
+                case cmd_name:
+                    dmi_instruction = dmi_instructions[names.index(cmd_name)]
+                    cmd = cmds_data0[names.index(cmd_name)]
         CMD_TDATASET = [
             cmd,  # csrw tdatareg, x5  write x5 to tdatareg progbuff0 7A0E9073 t4
             0x84004001CE,  # ebreak    progbuff1
@@ -827,6 +826,12 @@ class UrjtagTermin():
         address=self.dmi_instruction_decode(dpc_step_set)
         print(f"dpc is set to {hex(address)}")
         self.dpc_read()
+    def gpio_read_new(self):
+        gpio_in_1=self.lookmem(0xfffffc00)
+        gpio_in_2 = self.lookmem(0xfffffc04)
+        gpio_out_1 = self.lookmem(0xfffffc08)
+        gpio_out_2 = self.lookmem(0xfffffc0c)
+        print(gpio_in_1,gpio_in_2  ,gpio_out_1 ,gpio_out_2 )
     def gpio_read(self):
         self.haltreq()
         gpio_2 = self.dmi_instruction_generate(0x2, 0x00FAF03, 0x20)
@@ -917,6 +922,6 @@ if __name__ == "__main__":
     Urjtag_T.haltreq()
     Urjtag_T.setreg(24,0xffff)
     Urjtag_T.lookreg()
-    #Urjtag_T.gpio_read()
+    Urjtag_T.gpio_read_new()
     #Urjtag_T.dcsr_detect()
     Urjtag_T.haltresumereq()

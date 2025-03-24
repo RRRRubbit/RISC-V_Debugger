@@ -41,12 +41,12 @@
       <widget class="QComboBox" name="comboBox_memorysize">
        <item>
         <property name="text">
-         <string>64bit</string>
+         <string>64byte</string>
         </property>
        </item>
        <item>
         <property name="text">
-         <string>256bit</string>
+         <string>256byte</string>
         </property>
        </item>
       </widget>

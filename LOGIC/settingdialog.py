@@ -1,6 +1,6 @@
 from PyQt5.QtCore import pyqtSignal
 
-from GUI.setting import *
+from GUI.ui_setting import *
 from GUI.ui_MainWindow import *
 
 class SettingDialog(QtWidgets.QDialog, Ui_Setting):

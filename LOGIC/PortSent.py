@@ -257,6 +257,7 @@ class PortSelectDialog(QtWidgets.QDialog, Ui_Dialog_PortSelect):
                 )
                 if reply == QMessageBox.Yes:
                     self.urc.trigger_set(0x60000040, 'tdata1')
+                    self.signal_breakpoint_address.emit()
                     print('trigger data1 is clean to 0x60000040\n')
                     QMessageBox.information(self, "clean successful", "breakpoint clean successful！")
         self.signal_get_dpc.emit(dpc)
@@ -324,7 +325,7 @@ class PortSelectDialog(QtWidgets.QDialog, Ui_Dialog_PortSelect):
         else:
             self.memory_size = Memory_size
 
-    def get_RAM(self, Scroll_Value=None, Model=None,Memory_size=None):
+    def get_mem(self, Scroll_Value=None, Model=None,Memory_size=None):
         if Memory_size is None:
             Memory_size = self.memory_size
         RAM_model = self.memory_model

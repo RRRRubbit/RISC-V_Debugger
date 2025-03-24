@@ -11,7 +11,7 @@ import serial
 from GUI.ui_MainWindow import *
 #from GUI.ui_BreakPointDialog import *
 from GUI.ui_PortSelect import *
-from GUI.setting import *
+from GUI.ui_setting import *
 from GUI.ui_memory_widget import *
 from LOGIC.BreakPointDialog import *
 from LOGIC.PortSent import *
@@ -45,7 +45,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.actionUpdate_Register.triggered.connect(self.get_register)
         self.action_upload_framework.triggered.connect(self.PortSelect.send_from_hex_file)
         self.actionReset.triggered.connect(self.reset_program)
-        self.actionLoad.triggered.connect(self.get_lst)
+        self.actionLoad.triggered.connect(self.get_codefile)
         self.actionList_Port.triggered.connect(self.set_Hightlight)
         self.ProgramCounter.connect(self.set_Hightlight)
         self.actionRefresh_Display.triggered.connect(self.Refresh_Display)
@@ -61,7 +61,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         #self.actionStep_Function_Run.triggered.connect(self.PortSelect.run_step_function_code)
         self.actionUpdate_RAM.triggered.connect(self.get_RAM)
-        self.actionUpdate_Port.triggered.connect(self.get_IO)
+        self.actionUpdate_Port.triggered.connect(self.get_gpio)
         self.actionMake_BreakPoint.triggered.connect(self.BreakPointDialog_show)
         #self.actionMake_BreakPoint.triggered.connect(self.BreakPoint.read_BreakPoints)
         self.actionClean_All_Break_Point.triggered.connect(self.clean_all_break_point)
@@ -70,7 +70,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.actionSetting.triggered.connect(self.setting_show)
         self.memory_window.verticalScrollBar_MEM.valueChanged.connect(self.on_sroll)
         self.scroll_timer.timeout.connect(self.get_ScrollBar)
-        self.ScrollBar_RAM.connect(lambda scrollvalue :self.PortSelect.get_RAM(Scroll_Value=scrollvalue))
+        self.ScrollBar_RAM.connect(lambda scrollvalue :self.PortSelect.get_mem(Scroll_Value=scrollvalue))
         self.pushButtonr_uart_send.clicked.connect(self.uart_send)
         self.PortSelect.signal_uart_receive.connect(self.uart_receive_update)
         self.lineEdit_uart_send.returnPressed.connect(self.pushButtonr_uart_send.click)
@@ -78,7 +78,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # Breakpoint model signal connect
         self.PortSelect.text_receive_register.connect(self.set_register)
         self.PortSelect.text_receive_RAM.connect(self.set_RAM)
-        self.PortSelect.signal_label_Port.connect(self.get_gpio)
+        self.PortSelect.signal_label_Port.connect(self.set_gpio)
         self.PortSelect.text_receive_IO.connect(self.set_IO)
 
         #self.PortSelect.text_receive_Breakpoint.connect(self.BreakPoint.set_BreakPoints_text)
@@ -88,7 +88,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.PortSelect.signal_csr_info.connect(self.csr_info_update)
         self.PortSelect.signal_get_dpc.connect(self.set_hightlight)
         self.PortSelect.signal_get_dpc.connect(self.set_label_dpc)
-        self.PortSelect.signal_get_IO.connect(self.get_IO)
+        self.PortSelect.signal_get_IO.connect(self.get_gpio)
         self.PortSelect.signal_refresh.connect(self.Refresh_Display)
         self.PortSelect.BP_signal.connect(self.make_breakpoint_text)
         #Breakpoint model signal connect
@@ -362,12 +362,10 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             QMessageBox.warning(self, "Warning", "Please open the Serial Port.")
         else:
             self.get_RAM()
-            self.get_IO()
+            self.get_gpio()
             self.get_register()
     def on_sroll(self):
         self.scroll_timer.start(300)
-
-
     def set_label_dpc(self,pc):
         pc_str=pc
         ProgramCounter = str(hex(int(pc_str, 16))).upper()
@@ -383,7 +381,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.textBrowser_uart_receive.moveCursor(QTextCursor.End)
     def csr_info_update(self, csr_info):
         self.label_csr.setText(csr_info)
-    def get_gpio(self,message):
+    def set_gpio(self,message):
         self.label_Port.setText(message)
         return
     def get_ram_model(self):
@@ -398,31 +396,6 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 #self.signal_RAM_model.emit('DMEM')
                 self.memory_window.verticalScrollBar_MEM.setMaximum(127)  # 0000-1fff
                 return 'DMEM'
-        # elif sender == self.actionCode_Memory:
-        #     print("Code Memory selected")
-        #     self.label_RAM_model.setText('Memory model: Display program memory area')
-        #     self.signal_RAM_model.emit('IMEM')
-        #     self.verticalScrollBar_MEM.setMaximum(255)#0000-3fff
-        #     return 'IMEM'
-        # elif sender == self.actionDirect_InRAM:
-        #     print("Direct InRAM selected")
-        #     self.label_RAM_model.setText('Memory model: Display internal data memory area')
-        #     self.signal_RAM_model.emit('DMEM')
-        #     self.verticalScrollBar_MEM.setMaximum(127)#0000-1fff
-        #     return 'DMEM'
-        # elif sender == self.actionIndirect_InRAM:
-        #     print("Indirect InRAM selected")
-        #     self.label_RAM_model.setText('Memory model: Display indirect data memory area ')
-        #     self.signal_RAM_model.emit('DI')
-        #     self.verticalScrollBar_MEM.setMaximum(3)#0000-00ff
-        #     return 'DI'
-        # elif sender == self.actionExternal_RAM:
-        #     print("External RAM selected")
-        #     self.label_RAM_model.setText('Memory model: Display external data memory area ')
-        #     self.signal_RAM_model.emit('DX')
-        #     self.verticalScrollBar_MEM.setMaximum(1023)#0000-ffff
-        #     return 'DX'
-        #elif sender == self.get_RAM():
 
     def get_RAM(self):
             print("> Starting get RAM... ")
@@ -430,7 +403,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             Scroll_Value = self.memory_window.verticalScrollBar_MEM.value()
             #print(Scroll_Value)
             ram_model = self.get_ram_model()
-            s = self.PortSelect.get_RAM(Scroll_Value,ram_model)
+            s = self.PortSelect.get_mem(Scroll_Value,ram_model)
             if s == "":
                 QMessageBox.warning(self,"Warning","Could not get RAM. Please check the connection.")
                 return
@@ -441,7 +414,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                     #self.set_register(self.s)
                     return
             #time.sleep(0.1)
-    def get_IO(self):
+    def get_gpio(self):
         self.statusBar_show("Getting IO",100)
         print("> Starting get IO... ")
         s = self.PortSelect.get_IO()
@@ -488,7 +461,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         else:
             QMessageBox.warning(self, "Warning", "Could not reset program. Please check the connection.")
     global content_exist
-    def get_lst(self):
+    def get_codefile(self):
         #Clean ASM Code Zone
         self.listWidget_ASM.clear()
         self.statusBar_show("Uploading asm file")
@@ -515,8 +488,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.statusBar_show("Hightlighting ProgramCounter")
         for index in range(self.listWidget_ASM.count()):
             item = self.listWidget_ASM.item(index)
-            # 设置背景颜色
-            Background = QBrush(QColor(255, 255, 255, 255))  # 黄色，带有一些透明度
+            # Set background color
+            Background = QBrush(QColor(255, 255, 255, 255))  # white
             item.setBackground(Background)
         pc_str=pc
         ProgramCounter = str(hex(int(pc_str,16)))
@@ -526,8 +499,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             item_text = item.text().lstrip()
             if text_to_find in item_text and item_text.startswith(text_to_find):
                 self.listWidget_ASM.scrollToItem(item)
-                # 设置背景颜色
-                brush = QBrush(QColor(255, 255, 0, 160))  # 黄色，带有一些透明度
+                # set background color
+                brush = QBrush(QColor(255, 255, 0, 160))  # yellow
                 item.setBackground(brush)
 
     ######Date processing and displaying functions##############################################################################################
@@ -578,41 +551,6 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
 
     def set_IO(self, message):
-        #s=message.split("\r\n#dd")
-        pattern= re.compile(r'D:(.+?)\r\n#')
-        c=pattern.findall(message)
-        i = 0
-        P = ['P0 = ', 'P1 = ', 'P2 = ', 'P3 = ', 'P4 = ', 'P5 = ']
-        d = ''
-        e = '\r\n'
-        '''
-        D:80: BD
-        #dd80 80
-        D:90: FE 
-        #dd90 90
-        D:A0: 7E
-        #dda0 a0
-        D:B0: FD
-        #ddb0 b0
-        D:E8: FF
-        #dde8 e8
-        D:F8: 3F
-        #ddf8 f8
-        #di0 4f
-        '''
-        for line in c:
-            #print(line)
-            line = line.split()
-            line_list = list(line)
-            line_list[0]=P[i]
-            i=i+1
-            line_list_1_bin=bin(int(line_list[1],16))
-            line_list_1_bin=line_list_1_bin.lstrip('0b')
-            line_list[1]='{:0>8}'.format(line_list_1_bin)
-            line = ''.join(line_list)
-            d = d+line+e+e
-        #print(d)
-        self.label_Port.setText(d)
         return d
     def set_register(self, message):
         self.label_Reg.setText(message)
