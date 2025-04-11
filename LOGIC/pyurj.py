@@ -40,13 +40,24 @@ class UrjtagTermin():
         self.urc.add_register("DMI", 41)
         self.urc.add_instruction("DMI", "10001", "DMI")
         self.urc.add_instruction("IDCODE", "00001", "IDCODE")
-        self.urc.add_instruction("DTMCS", "00001", "DTMCS")
+        self.urc.add_instruction("DTMCS", "10000", "DTMCS")
+    def idcode_read(self):
+        self.urc.set_instruction("IDCODE")
+        self.urc.shift_ir()
+        self.urc.shift_dr()
+        #self.urc.shift_dr()
+    def dtmcs_read(self):
+        self.urc.set_instruction("DTMCS")
+        self.urc.shift_ir()
+        self.urc.shift_dr()
+        self.urc.shift_dr()
     def haltreq(self):
         CMD_HALTREQ_C=0x4200000006
+        #CMD_HALTREQ_C = 0x40f0f0f0f
         self.urc.set_instruction("DMI")
         self.urc.shift_ir()
         self.urc.set_dr_in(CMD_HALTREQ_C)
-        self.urc.shift_dr()
+        #self.urc.shift_dr()
         self.urc.shift_dr()
         #print(self.urc.get_dr_out_string())
     def haltresumereq(self):
@@ -54,7 +65,7 @@ class UrjtagTermin():
         self.urc.set_instruction("DMI")
         self.urc.shift_ir()
         self.urc.set_dr_in(CMD_HALTRESUMEREQ_C)
-        self.urc.shift_dr()
+        #self.urc.shift_dr()
         self.urc.shift_dr()
         #print(self.urc.get_dr_out_string())
 
@@ -665,7 +676,7 @@ class UrjtagTermin():
                         f"mtinst: {entry['mtinst']}"
                     )
                     return result
-            return f"未找到对应的 Trap 信息，mcause = 0x{mcause}"
+            return f"No finding Trap info，mcause = 0x{mcause}"
 
         # 测试该函数
         info = detect_mcause(int(decode_value,16))
@@ -964,10 +975,11 @@ if __name__ == "__main__":
     #Urjtag_T.connection_detect()
     #Urjtag_T.haltresumereq()
     #Urjtag_T.lookmem_range(0x00000000,0x00000040)
-    Urjtag_T.haltreq()
+    #Urjtag_T.idcode_read()
+    Urjtag_T.idcode_read()
     #Urjtag_T.dcsr_set()
     #Urjtag_T.trigger_model_csr_read()
-    Urjtag_T.csr_set(0xbcdf,0x7a2)
-    Urjtag_T.csr_read(0x7a1)
-    Urjtag_T.csr_read(0x7a2)
-    Urjtag_T.haltresumereq()
+    #Urjtag_T.csr_set(0x60000044,0x7a2)
+    #Urjtag_T.csr_read(0x7a1)
+    #Urjtag_T.csr_read(0x7a2)
+    #Urjtag_T.haltresumereq()
