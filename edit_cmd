@@ -1,0 +1,184 @@
+https://sourceforge.net/projects/urjtag/files/urjtag/2021.03/
+sudo apt install build-essential  python3-pip libftdi-dev libftdi1 libusb-0.1-4 libusb-dev pkgconf libusb-1.0-0-dev
+./configure
+make
+sudo make install
+export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH 
+lsusb
+sudo chmod 666 /dev/bus/usb/001/004
+jtag
+xpack-riscv-none-elf-gcc-14.2.0-3-linux-x64.tar.gz
+register TAP_ADDR 5
+register IDCODE 32
+register DTMCS 32  
+register DMI 41 
+https://meeting.tencent.com/dm/p1DnQLiN3ota
+
+#腾讯会议：957-745-925
+instruction length 5                    
+instruction DTMCS 10000 DTMCS
+instruction DMI 10001 DMI
+instruction IDCODE 00001 IDCODE
+
+dr 0x4200000006 halt req
+dr 0x4100000002 halt resume req
+00100000100000000000000000000000000000010 (0x4100000002)  halt resume req
+
+
+dr 0x4400000001 dmstatus0x11 read
+dr 0x5800000001 abstracts0x16 read 
+dr 0x6000000001 abstractauto0x18 read
+dr 00110000000000000000001000000000000000010 abstractauto0x18 probuf0 set 
+dr 00110000000000000000010000000000000000010 abstractauto0x18 probuf1 set 
+dr 0x7400000001  nextdm0x1d read
+dr 0x8000000001 progbuf00x20 read
+dr 0x8000000001
+dr 0100000 1111000 
+SW		imm[11:5] | rs2  | rs1  | funct3 | imm[4:0] | opcode 
+		7-bit         | 5-bit | 5-bit | 3-bit  | 5-bit        | 7-bit
+LW		imm[11:0]  | rs1  | funct3  | rd  | opcode  
+		12-bit imm | 5-bit |  3-bit  | 5-bit | 7-bit  
+LW rd 0(rs1) = [imm11:0][rs1]010[rd]0000011 = [e80] 
+			000000000000 01000 010 01001 0000011
+			progbug0 set 01000000000000000000100001001000000001110 LW s0 0(s0)
+					      01000000000000000000100001001001000001110 LW s0 0(s1)
+CSRW 
+
+CSRR   	imm[11:5] | rs2  | rs1  | funct3 | imm[4:0] | opcode 
+		7-bit         | 5-bit | 5-bit | 3-bit  | 5-bit        | 7-bit
+opcode: 1110011 （7 bits）
+funct3: 001 （3 bits）
+rd: x5，即寄存器 5，对应二进制 00101（5 bits）
+csr: mepc，即地址 0x341，对应二进制 000000110100001（12 bits）
+  constant dm_code_base_c : std_ulogic_vector(31 downto 0) := x"fffffe00"; -- code ROM (park loop)
+  constant dm_pbuf_base_c : std_ulogic_vector(31 downto 0) := x"fffffe80"; -- program buffer (PBUF)
+  constant dm_data_base_c : std_ulogic_vector(31 downto 0) := x"ffffff00"; -- abstract data buffer (DATA) 0xf00=1111000 00000= imm[11:5] imm[4:0]
+  constant dm_sreg_base_c : std_ulogic_vector(31 downto 0) := x"ffffff80"; -- status register(s) (SREG)
+LW 0x00002003   00000000000000000010000000000011- lw zero, 0(zero) opcode 0000011  funct 3 010  [imm11:0][rs1]010[rd]0000011
+			     000000000000 00000 010 00000 0000011
+0x00002023- 00000000000000000000000000010000000100011- sw zero, 0(zero) opcode 0100011 funct3 010  [imm11:5][rs2][rs1]010[imm4:0]0100011
+
+
+EBREAK instr_ebreak_c 00100073
+		progbuf0 set 01000000000000000010000000000000111001110 0x80004001CE
+		progbuf1 set 01000010000000000010000000000000111001110 0x84004001CE
+EBREAK dr  0x80004001CE
+
+dr 01000000000000000000100001001001000001110 LW s0 0(s1) 0x800010920E
+dr 01000010000000000010000000000000111001110 progbuf1 set ebreak 
+dr 00001000000000000000000000000000000000010 write address 0x00000000 in data0 
+dr 00101110000000000100111000100000000100110 cmd postexec=1 transfer=1 write=1(copy data0 to reg) reg=1009(s1) 0x5C009C4026
+dr 00101110000000000100010000100000000100001 copy s0 in data0
+dr 0x1000000001 read data0
+
+dr 01000001110011001100000000001000010111001110                                                            
+
+dr 0x8400000001 progbuf10x21 read
+dr 0xC000000001 authdata 0x30 read 
+dr 0xE000000001 sbcs 0x38 read
+dr 0x10000000001 haltsum0 read
+dr 0x4800000001 haltinfo read
+00100010000000001000011000000111000001100 (0x44010C0E0C) halt 0x10
+
+00100100000000000010001000111111000000000 (0x4800447E00) halt info 0x12
+
+0010111000000001010000010000100000000111110 (0x5C008C403E) copy dato 0 to x 15
+0010111000000001010000011000100000000111110
+0x17    | cmdtype |1|010|0|000|10|100000000111110
+00001000000000000000000000000000000000001 (0x1000000001) look data 0
+
+
+00101110000000000100010000100000001111110 (0x5C0088403E) copy x 31 to data 0 
+00101110000000000100010000100000001111010 (0x5C0088403A) copy x 30 to data 0
+00101110000000000100010000100000001110110 (0x5C00884036) copy x 29 to data 0
+00101110000000000100010000100000001110010 (0x5C00884032) copy x 28 to data 0
+00101110000000000100010000100000001101110 copy x 27 to data 0
+00101110000000000100010000100000001101010 copy x 26 to data 0
+00101110000000000100010000100000001100110 copy x 25 to data 0
+00101110000000000100010000100000001100010 copy x 24 to data 0
+00101110000000000100010000100000001011110 copy x 23 to data 0
+00101110000000000100010000100000001011010 copy x 22 to data 0
+00101110000000000100010000100000001010110 copy x 21 to data 0
+00101110000000000100010000100000001010010 copy x 20 to data 0
+00101110000000000100010000100000001001110 copy x 19 to data 0
+00101110000000000100010000100000001001010 copy x 18 to data 0
+00101110000000000100010000100000001000110 copy x 17 to data 0
+00101110000000000100010000100000001000010 copy x 16 to data 0
+00101110000000000100010000100000000111110 (0x5C0088403E) copy x 15 to data 0 
+00101110000000000100010000100000000111010 (0x5C0088403A) copy x 14 to data 0
+00101110000000000100010000100000000110110 (0x5C00884036) copy x 13 to data 0
+00101110000000000100010000100000000110010 (0x5C00884032) copy x 12 to data 0
+00101110000000000100010000100000000101110 copy x 11 to data 0
+00101110000000000100010000100000000101010 copy x 10 to data 0
+00101110000000000100010000100000000100110 copy x 09 to data 0
+00101110000000000100010000100000000100010 copy x 08 to data 0
+00101110000000000100010000100000000011110 copy x 07 to data 0
+00101110000000000100010000100000000011010 copy x 06 to data 0
+00101110000000000100010000100000000010110 copy x 05 to data 0
+00101110000000000100010000100000000010010 copy x 04 to data 0
+00101110000000000100010000100000000001110 copy x 03 to data 0
+00101110000000000100010000100000000001010 copy x 02 to data 0
+00101110000000000100010000100000000000110 copy x 01 to data 0
+00101110000000000100010000100000000000010 copy x 00 to data 0
+
+
+dr 0x00942023 sw s1 0(s0)
+01000000000000010010100001000000010001110
+
+00101110000000000100010000100000000000010 copy x 00 to data 0
+X00(zero)  X01(ra)    X02(sp)    X03(gp)    X04(tp)    X05(t0)    X06(t1)    X07(t2)    X08(s0/fp) X09(s1)    X10(a0)    X11(a1)    X12(a2)    X13(a3)    X14(a4)    X15(a5)    \n0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 \nX16(a6)    X17(a7)    X18(s2)    X19(s3)    X20(s4)    X21(s5)    X22(s6)    X23(s7)    X24(s8)    X25(s9)    X26(s10)   X27(s11)   X28(t3)    X29(t4)    X30(t5)    X31(t6)\n0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000\n
+
+X00(zero)  X01(ra)    X02(sp)    X03(gp)    X04(tp)    X05(t0)    X06(t1)    X07(t2)    X08(s0/fp) X09(s1)    X10(a0)    X11(a1)    X12(a2)    X13(a3)    X14(a4)    X15(a5)    \n0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 \nX16(a6)    X17(a7)    X18(s2)    X19(s3)    X20(s4)    X21(s5)    X22(s6)    X23(s7)    X24(s8)    X25(s9)    X26(s10)   X27(s11)   X28(t3)    X29(t4)    X30(t5)    X31(t6)\n0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000
+
+cd /home/sun/workspace/third/neorv32-1.10.7/sw/openocd/
+riscv-none-elf-gdb
+target remote localhost:3333
+x/64xb 0x0000 
+p/x $tdata1
+b *0x204 info break enable 1 tbreak *0x1000 hbreak <address>
+
+
+file /home/sun/workspace/third/neorv32-1.10.7/sw/example/bus_explorer/main.elf  file /home/sun/下载/demo_setup_sun/main.elf 
+
+openocd -f interface/cmsis-dap.cfg -f openocd_neorv32.cfg 
+
+
+export PATH="/mingw64/bin:$PATH"
+export CFLAGS="-I/mingw64/include -DHAVE_GETTEXT -Dswprintf=libintl_swprintf"
+export LDFLAGS="-L/mingw64/lib -lintl"
+./configure --prefix=/mingw64 
+
+export PATH="/mingw64/bin:$PATH"
+export CFLAGS="-I/mingw64/include -DHAVE_GETTEXT -Dswprintf=libintl_swprintf"
+export LDFLAGS="-L/mingw64/lib -lintl"
+export PYTHON="/d/PycharmProjects/pyurj/.venv/bin/python"
+./configure --prefix=/mingw64
+
+
+
+from distutils.core import setup, Extension
+
+libraries = ['intl','urjtag']
+libraries.extend( w.replace('-l', '') for w in "-lftdi1 -lusb-1.0  -lusb-1.0 /mingw64/lib/libintl.dll.a -L/mingw64/lib /mingw64/lib/libiconv.dll.a -L/mingw64/lib".split() if w.replace('-l', '') not in libraries )
+
+setup(name="urjtag",
+      version="2021.03",
+      description="urJtag Python Bindings",
+      ext_modules=[
+        Extension("urjtag", ["./chain.c", "./register.c"],
+                  define_macros=[('HAVE_CONFIG_H', None)],
+                  include_dirs=['../..', '../../include', '../..'],
+                  library_dirs=['../../src/.libs'],
+                  libraries=libraries)
+         ])
+setup(name="urjtag",
+      version="2021.03",
+      description="urJtag Python Bindings",
+      ext_modules=[
+        Extension("urjtag", ["./chain.c", "./register.c"],
+                  define_macros=[('HAVE_CONFIG_H', None)],
+                  include_dirs=['../..', '../../include', '../..', '../../lib/.libs', '/mingw64/lib'],
+                  library_dirs=['../../src/.libs'],
+                  libraries=libraries)
+         ])
+
